@@ -1,0 +1,150 @@
+{
+  "index_patterns": ["kerio-connect-*"],
+  "priority": 500,
+  "template": {
+    "settings": {
+      "index.refresh_interval": "30s",
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "mapping.ignore_malformed": true
+    },
+    "mappings": {
+      "dynamic": true,
+      "date_detection": false,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "match_only_text" },
+        "message_id": { "type": "keyword", "ignore_above": 2048 },
+        "tags": { "type": "keyword" },
+        "service": { "properties": { "name": { "type": "keyword" } } },
+        "process": { "properties": { "name": { "type": "keyword" } } },
+        "host": { "properties": { "name": { "type": "keyword" } } },
+        "log": {
+          "properties": {
+            "syslog": {
+              "properties": {
+                "priority": { "type": "byte" },
+                "version": { "type": "byte" }
+              }
+            }
+          }
+        },
+        "event": {
+          "properties": {
+            "original": { "type": "wildcard" },
+            "provider": { "type": "keyword" },
+            "module": { "type": "keyword" },
+            "dataset": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "action": { "type": "keyword" },
+            "outcome": { "type": "keyword" },
+            "reason": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            }
+          }
+        },
+        "network": { "properties": { "protocol": { "type": "keyword" } } },
+        "source": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "integer" }
+          }
+        },
+        "destination": {
+          "properties": {
+            "ip": { "type": "ip" }
+          }
+        },
+        "user": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "email": { "type": "keyword" },
+            "domain": { "type": "keyword" }
+          }
+        },
+        "user_agent": {
+          "properties": {
+            "original": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            }
+          }
+        },
+        "email": {
+          "properties": {
+            "local_id": { "type": "keyword" },
+            "subject": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 2048 } }
+            },
+            "delivery_status": { "type": "keyword" },
+            "from": {
+              "properties": {
+                "address": { "type": "keyword" },
+                "name": {
+                  "type": "text",
+                  "fields": { "keyword": { "type": "keyword", "ignore_above": 512 } }
+                }
+              }
+            },
+            "to": { "properties": { "address": { "type": "keyword" } } }
+          }
+        },
+        "file": {
+          "properties": {
+            "size": { "type": "long" },
+            "directory": { "type": "keyword", "ignore_above": 4096 }
+          }
+        },
+        "tls": { "properties": { "established": { "type": "boolean" } } },
+        "related": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "user": { "type": "keyword" }
+          }
+        },
+        "kerio": {
+          "properties": {
+            "component": { "type": "keyword" },
+            "protocol": { "type": "keyword" },
+            "protocol_raw": { "type": "keyword" },
+            "service": { "type": "keyword" },
+            "report": { "type": "keyword" },
+            "ssl": { "type": "keyword" },
+            "result": { "type": "keyword" },
+            "status": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "delivery_status_text": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "sasl_method": { "type": "keyword" },
+            "access_policy_rule": { "type": "keyword" },
+            "user_raw": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "user_rule": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "expanded_from": { "type": "keyword" },
+            "delivered_raw": { "type": "keyword" },
+            "delivered_at": { "type": "date" },
+            "smtp_processed_count": { "type": "integer" },
+            "smtp_processed_seconds": { "type": "integer" },
+            "folder": {
+              "properties": {
+                "destination": { "type": "keyword", "ignore_above": 4096 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

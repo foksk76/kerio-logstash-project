@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "docker: up",
+      "type": "shell",
+      "command": "docker compose up -d",
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: down",
+      "type": "shell",
+      "command": "docker compose down",
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: logs logstash",
+      "type": "shell",
+      "command": "docker compose logs -f logstash",
+      "problemMatcher": []
+    },
+    {
+      "label": "logstash: config test",
+      "type": "shell",
+      "command": "docker compose run --rm logstash /usr/share/logstash/bin/logstash --path.settings /usr/share/logstash/config --config.test_and_exit -f /usr/share/logstash/pipeline/kerio-connect-main.conf",
+      "problemMatcher": []
+    },
+    {
+      "label": "elasticsearch: install templates",
+      "type": "shell",
+      "command": "curl -sk -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT https://localhost:9200/_index_template/kerio-connect-ecs --data-binary @elasticsearch/templates/kerio-connect-ecs-template.json && curl -sk -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT https://localhost:9200/_index_template/kerio-flow-template --data-binary @elasticsearch/templates/kerio-flow-template.json",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": false,
+  "search.exclude": {
+    "**/.git": true,
+    "**/node_modules": true,
+    "**/.DS_Store": true
+  }
+}

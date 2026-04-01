@@ -1,0 +1,88 @@
+{
+  "index_patterns": ["kerio-flow-*"],
+  "priority": 600,
+  "template": {
+    "settings": {
+      "index.refresh_interval": "30s",
+      "number_of_shards": 1,
+      "number_of_replicas": 1
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message_id": { "type": "keyword", "ignore_above": 2048 },
+        "tags": { "type": "keyword" },
+        "event": {
+          "properties": {
+            "kind": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "action": { "type": "keyword" },
+            "outcome": { "type": "keyword" },
+            "dataset": { "type": "keyword" }
+          }
+        },
+        "service": { "properties": { "name": { "type": "keyword" } } },
+        "process": { "properties": { "name": { "type": "keyword" } } },
+        "host": { "properties": { "name": { "type": "keyword" } } },
+        "email": {
+          "properties": {
+            "local_id": { "type": "keyword" },
+            "subject": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 2048 } }
+            },
+            "to_count": { "type": "integer" },
+            "from": { "properties": { "address": { "type": "keyword" } } },
+            "to": { "properties": { "address": { "type": "keyword" } } }
+          }
+        },
+        "source": { "properties": { "ip": { "type": "ip" } } },
+        "destination": { "properties": { "ip": { "type": "ip" } } },
+        "file": { "properties": { "size": { "type": "long" } } },
+        "kerio": {
+          "properties": {
+            "service": { "type": "keyword" },
+            "protocol": { "type": "keyword" },
+            "user_raw": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "user_rule": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "ssl": { "type": "keyword" },
+            "results": { "type": "keyword" },
+            "statuses": {
+              "type": "text",
+              "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+            },
+            "recv_count": { "type": "integer" },
+            "sent_count": { "type": "integer" },
+            "has_delivered": { "type": "boolean" },
+            "has_relayed": { "type": "boolean" },
+            "has_delayed": { "type": "boolean" },
+            "first_seen": { "type": "date" },
+            "last_seen": { "type": "date" },
+            "events": {
+              "type": "nested",
+              "properties": {
+                "kind": { "type": "keyword" },
+                "timestamp": { "type": "date" },
+                "to": { "type": "keyword" },
+                "result": { "type": "keyword" },
+                "status": {
+                  "type": "text",
+                  "fields": { "keyword": { "type": "keyword", "ignore_above": 1024 } }
+                },
+                "remote_host": { "type": "ip" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-docker",
+    "elastic.elasticsearch",
+    "eamodio.gitlens"
+  ]
+}

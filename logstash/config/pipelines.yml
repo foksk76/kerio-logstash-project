@@ -1,0 +1,2 @@
+- pipeline.id: kerio-connect-main
+  path.config: "/usr/share/logstash/pipeline/kerio-connect-main.conf"
