@@ -2,6 +2,8 @@
 
 This project parses Kerio Connect syslog, normalizes events to ECS-like fields, aggregates mail flow by Queue-ID, and sends the results to Elasticsearch for analysis in Kibana or Grafana.
 
+Current release: `0.1b.0` (beta).
+
 ## Components
 
 - `logstash/pipeline/kerio-connect-main.conf` parses Kerio Connect syslog from a test file, UDP, or TCP input

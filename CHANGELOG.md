@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project currently follows a simple manual versioning approach.
 
-## [0.1.0] - 2026-04-01
+## [0.1b.0] - 2026-04-01
+
+First beta release.
 
 ### Added
 
