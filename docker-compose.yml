@@ -15,7 +15,7 @@ services:
       - esdata:/usr/share/elasticsearch/data
       - ./elasticsearch/templates:/templates:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sk -u elastic:${ELASTIC_PASSWORD} https://localhost:9200 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD} http://localhost:9200 >/dev/null || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 20
@@ -27,10 +27,10 @@ services:
       elasticsearch:
         condition: service_healthy
     environment:
-      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_SERVICEACCOUNTTOKEN=${KIBANA_SERVICE_ACCOUNT_TOKEN}
       - SERVER_PUBLICBASEURL=http://localhost:5601
+      - XPACK_SECURITY_ENCRYPTIONKEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     ports:
       - "5601:5601"

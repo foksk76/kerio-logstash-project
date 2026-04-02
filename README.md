@@ -2,7 +2,7 @@
 
 This project parses Kerio Connect syslog, normalizes events to ECS-like fields, aggregates mail flow by Queue-ID, and sends the results to Elasticsearch for analysis in Kibana or Grafana.
 
-Current release: `0.1b.0` (beta).
+Current release: `0.1b.1` (beta).
 
 ## Components
 
@@ -40,12 +40,12 @@ docker compose up -d
 3. Install the Elasticsearch index templates:
 
 ```bash
-curl -sk -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
-  -X PUT https://localhost:9200/_index_template/kerio-connect-ecs \
+curl -s -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
+  -X PUT http://localhost:9200/_index_template/kerio-connect-ecs \
   --data-binary @elasticsearch/templates/kerio-connect-ecs-template.json
 
-curl -sk -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
-  -X PUT https://localhost:9200/_index_template/kerio-flow-template \
+curl -s -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
+  -X PUT http://localhost:9200/_index_template/kerio-flow-template \
   --data-binary @elasticsearch/templates/kerio-flow-template.json
 ```
 
