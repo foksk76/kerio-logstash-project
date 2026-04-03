@@ -2,7 +2,7 @@
 
 This project parses Kerio Connect syslog, normalizes events to ECS-like fields, aggregates mail flow by Queue-ID, and sends the results to Elasticsearch for analysis in Kibana or Grafana.
 
-Current release: `0.1b.1` (beta).
+Current release: `0.1b.2` (beta).
 
 ## Components
 
@@ -49,7 +49,8 @@ curl -s -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
   --data-binary @elasticsearch/templates/kerio-flow-template.json
 ```
 
-4. Open Kibana at `http://localhost:5601`.
+4. Kibana gets its Elasticsearch service account token automatically during `docker compose up -d`.
+5. Open Kibana at `http://localhost:5601`.
 
 ## Useful Commands
 
@@ -79,6 +80,7 @@ docker compose down
 
 - `pipeline.workers` is set to `1` because the mail flow aggregation uses the `aggregate` filter.
 - The pipeline writes raw normalized events to `kerio-connect-*` and aggregated flow events to `kerio-flow-*`.
+- The Docker deployment auto-generates and reuses a Kibana service account token in a named Docker volume, so no manual `KIBANA_SERVICE_ACCOUNT_TOKEN` is required.
 - The current Logstash test workflow intentionally uses `--config.test_and_exit`, so the message about `pipelines.yml` being ignored is expected during validation.
 
 ## Validation Status
