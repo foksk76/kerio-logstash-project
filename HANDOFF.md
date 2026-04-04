@@ -6,24 +6,24 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-04 10:08 UTC
+- Updated: 2026-04-04 10:13 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1b.3`
-- Runtime ELK host: `10.4.29.70`
-- Runtime Kerio host: `10.4.29.71`
+- Latest tagged release: `v0.1b.4`
+- Runtime ELK host: redacted from repository; use your local inventory or SSH alias
+- Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
 - File-based test input: removed
 
 ## Stack State
 
-Remote stack on `10.4.29.70`:
+Remote ELK stack:
 
 - `kerio-elasticsearch`: `Up (healthy)`
-- `kerio-kibana`: `Up`, published on `http://10.4.29.70/`
+- `kerio-kibana`: `Up`, published on the ELK host HTTP endpoint
 - `kerio-logstash`: `Up`, listening on `5514` and `9600`
 
-Remote Kerio on `10.4.29.71`:
+Remote Kerio stack:
 
 - `kerio-connect-lab`: `Up (healthy)`
 - SMTP and admin ports are published and working
@@ -42,9 +42,9 @@ Test message:
 
 Observed path:
 
-1. Kerio `mail.log` on `10.4.29.71` recorded both `Recv` and `Sent`.
-2. `kerio-logstash` on `10.4.29.70` emitted an aggregated `message_flow_aggregated` event.
-3. Elasticsearch on `10.4.29.70` stored the parsed result in `kerio-flow-2026.04.04`.
+1. Kerio `mail.log` on the Kerio host recorded both `Recv` and `Sent`.
+2. `kerio-logstash` on the ELK host emitted an aggregated `message_flow_aggregated` event.
+3. Elasticsearch on the ELK host stored the parsed result in `kerio-flow-2026.04.04`.
 
 Validated fields:
 
@@ -71,13 +71,14 @@ Validated fields:
 - Updated `README.md` for the live syslog workflow and Kibana on host port `80`.
 - Rebuilt the changelog into release-based sections with an `Unreleased` section for current work.
 - Added `HANDOFF.md` and `NEXT_STEPS.md`.
+- Removed concrete lab IP addresses from repository-tracked files.
 
 ## Suggested Resume Commands
 
 ```bash
 cd /root/kerio-logstash-project
 git status
-ssh root@10.4.29.70 'cd /root/kerio-logstash-project && docker compose ps'
-ssh root@10.4.29.70 'curl -s http://localhost:9600/_node/pipelines?pretty'
-ssh root@10.4.29.70 'cd /root/kerio-logstash-project && source .env && curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200/kerio-flow-*/_search?pretty -H "Content-Type: application/json" -d "{\"size\":5,\"sort\":[{\"@timestamp\":\"desc\"}]}"'
+ssh root@<elk-host> 'cd /root/kerio-logstash-project && docker compose ps'
+ssh root@<elk-host> 'curl -s http://localhost:9600/_node/pipelines?pretty'
+ssh root@<elk-host> 'cd /root/kerio-logstash-project && source .env && curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200/kerio-flow-*/_search?pretty -H "Content-Type: application/json" -d "{\"size\":5,\"sort\":[{\"@timestamp\":\"desc\"}]}"'
 ```

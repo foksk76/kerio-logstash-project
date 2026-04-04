@@ -1,10 +1,10 @@
 # Next Steps
 
-Updated: 2026-04-04 10:08 UTC
+Updated: 2026-04-04 10:13 UTC
 
 ## Current State
 
-- Live syslog from Kerio `10.4.29.71` into Logstash `10.4.29.70` is working.
+- Live syslog from the Kerio host into the ELK host is working.
 - Final validation passed with `Queue-ID 69d0e1e9-00000003`.
 - The stack no longer depends on `testdata/syslog_anonymized.txt`.
 

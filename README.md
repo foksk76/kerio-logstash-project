@@ -2,7 +2,7 @@
 
 This project parses Kerio Connect syslog, normalizes events to ECS-like fields, aggregates mail flow by Queue-ID, and sends the results to Elasticsearch for analysis in Kibana or Grafana.
 
-Latest tagged release: `v0.1b.3` (beta).
+Latest tagged release: `v0.1b.4` (beta).
 
 ## Components
 
@@ -53,9 +53,9 @@ curl -s -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
 
 HomeLab example:
 
-- Kerio Connect: `10.4.29.71`
-- ELK / Logstash host: `10.4.29.70`
-- Syslog target: `10.4.29.70:5514`
+- Kerio Connect host: `<kerio-connect-host>`
+- ELK / Logstash host: `<elk-host>`
+- Syslog target: `<elk-host>:5514`
 
 4. Kibana gets its Elasticsearch service account token automatically during `docker compose up -d`.
 5. Open Kibana at `http://localhost/`.
@@ -117,4 +117,4 @@ The project was validated on Ubuntu 24.04 with:
 - Logstash `8.19.11`
 - Elasticsearch `8.19.11`
 - Kibana `8.19.11`
-- Live Kerio Connect syslog from `10.4.29.71` into Logstash on `10.4.29.70`
+- Live Kerio Connect syslog from a separate Kerio host into Logstash on the ELK host

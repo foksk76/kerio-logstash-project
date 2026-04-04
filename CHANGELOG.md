@@ -8,6 +8,13 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 No unreleased changes are recorded yet.
 
+## [0.1b.4] - 2026-04-04
+
+### Changed
+
+- Removed concrete lab IP addresses from repository-tracked documentation and handoff files.
+- Replaced host-specific examples with neutral placeholders such as `<kerio-connect-host>` and `<elk-host>`.
+
 ## [0.1b.3] - 2026-04-04
 
 ### Added
@@ -29,7 +36,7 @@ No unreleased changes are recorded yet.
 
 ### Validated
 
-- End-to-end live mail flow from Kerio Connect `10.4.29.71` through Logstash `10.4.29.70` into Elasticsearch `kerio-flow-*`.
+- End-to-end live mail flow from a separate Kerio Connect host through Logstash into Elasticsearch `kerio-flow-*`.
 
 ## [0.1b.2] - 2026-04-03
 
