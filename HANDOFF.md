@@ -6,10 +6,10 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-04 10:13 UTC
+- Updated: 2026-04-04 16:10 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1b.4`
+- Latest tagged release: `v0.1.0`
 - Runtime ELK host: redacted from repository; use your local inventory or SSH alias
 - Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
@@ -37,8 +37,8 @@ Test message:
 
 - Subject: `KERIO-FINAL-20260404-100321`
 - Queue-ID: `69d0e1e9-00000003`
-- From: `lab@example.net`
-- To: `doge@kerio.lo`
+- From: `<external-test-sender@example.net>`
+- To: `<control-mailbox@lab-domain>`
 
 Observed path:
 
@@ -52,15 +52,15 @@ Validated fields:
 - `event.outcome=success`
 - `email.local_id=69d0e1e9-00000003`
 - `email.subject=KERIO-FINAL-20260404-100321`
-- `email.from.address=lab@example.net`
-- `email.to.address=[doge@kerio.lo]`
+- `email.from.address=<external-test-sender@example.net>`
+- `email.to.address=[<control-mailbox@lab-domain>]`
 - `kerio.recv_count=1`
 - `kerio.sent_count=1`
 
 ## Release State
 
-- Latest release in this repository: `v0.1b.3`
-- Release content includes the live syslog-only workflow, the Kerio mail parser fix, and release tracking docs
+- Latest release in this repository: `v0.1.0`
+- Release content includes the live syslog-only workflow, the Kerio mail parser fix, the mail-test toolkit scaffold, and release tracking docs
 
 ## What Changed In This Session
 
@@ -72,6 +72,19 @@ Validated fields:
 - Rebuilt the changelog into release-based sections with an `Unreleased` section for current work.
 - Added `HANDOFF.md` and `NEXT_STEPS.md`.
 - Removed concrete lab IP addresses from repository-tracked files.
+- Added a mail-test toolkit scaffold under `scripts/` for identity generation, batch SMTP sending, and run verification.
+- Smoke-tested the new toolkit with a generated `MAILLOG-SMOKE` manifest and a `--dry-run` batch send.
+- `generate_identities.py` now writes `kerio_import_users.csv` using the same field set as the real Kerio users export sample.
+- `generate_identities.py` now generates a unique random 12-character password per mailbox by default, with mixed case, digits, and special characters.
+- The Kerio users import now matches the sample export defaults for plain user accounts.
+- Removed the duplicate `users_<domain>_<date>.csv` helper output from generated run artifacts.
+- `kerio_import_users.csv` now also carries a `Password` column filled from the generated complex mailbox passwords.
+- Generated passwords now avoid fragments from the login, domain, and display name and use a narrower Kerio-safe symbol set.
+- Aliases are now emitted as `ui_aliases.csv` for manual Kerio web UI entry, while the full alias pool remains in `identities.json`.
+- `verify_run.py` now uses recipient-plus-time-window fallback correlation for negative cases such as unknown recipients and can infer raw failure classes from message text when `event.action` is missing.
+- The real Kerio batch run `MAILLOG-KERIO-DEFAULT-20260404-1539` now verifies cleanly with `passed=100`, `failed=0`, and `unparsed_hits=0`.
+- Raw negative-delivery Kerio events now parse correctly even when they arrive as `process.name=kerio`; Elasticsearch documents now include `email.from.address`, `email.to.address`, `event.action=delivery_unknown_recipient`, `event.outcome=failure`, and `kerio.result=not_delivered`.
+- Live proof event: a synthetic nonexistent recipient in the lab domain at `2026-04-04T16:09:28Z` was stored in `kerio-connect-2026.04.04` with explicit non-delivery fields.
 
 ## Suggested Resume Commands
 

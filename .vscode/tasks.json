@@ -22,13 +22,13 @@
     {
       "label": "logstash: config test",
       "type": "shell",
-      "command": "docker compose run --rm logstash /usr/share/logstash/bin/logstash --path.settings /usr/share/logstash/config --config.test_and_exit -f /usr/share/logstash/pipeline/kerio-connect-main.conf",
+      "command": "docker compose --env-file .env run --rm logstash /usr/share/logstash/bin/logstash --path.settings /usr/share/logstash/config --config.test_and_exit -f /usr/share/logstash/pipeline/kerio-connect-main.conf",
       "problemMatcher": []
     },
     {
       "label": "elasticsearch: install templates",
       "type": "shell",
-      "command": "curl -sk -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT https://localhost:9200/_index_template/kerio-connect-ecs --data-binary @elasticsearch/templates/kerio-connect-ecs-template.json && curl -sk -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT https://localhost:9200/_index_template/kerio-flow-template --data-binary @elasticsearch/templates/kerio-flow-template.json",
+      "command": "curl -s -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT http://localhost:9200/_index_template/kerio-connect-ecs --data-binary @elasticsearch/templates/kerio-connect-ecs-template.json && curl -s -u elastic:${env:ELASTIC_PASSWORD} -H 'Content-Type: application/json' -X PUT http://localhost:9200/_index_template/kerio-flow-template --data-binary @elasticsearch/templates/kerio-flow-template.json",
       "problemMatcher": []
     }
   ]

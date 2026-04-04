@@ -1,3 +1,7 @@
 .env
 .vscode/*.log
 data/
+__pycache__/
+*.py[cod]
+artifacts/runs/*
+!artifacts/runs/.gitkeep

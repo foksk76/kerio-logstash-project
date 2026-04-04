@@ -6,7 +6,35 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
-No unreleased changes are recorded yet.
+## [0.1.0] - 2026-04-04
+
+### Added
+
+- `scripts/generate_identities.py` as a scaffold for generating test mailboxes, aliases, and nonexistent recipients.
+- `scripts/generate_identities.py` now also writes:
+  - `kerio_import_users.csv` as an import-oriented CSV for Kerio users
+  - `ui_aliases.csv` as a manual-entry helper for the Kerio aliases web interface
+- `scripts/send_mail_batch.py` as a scaffold for constrained-random SMTP mail generation with configurable batch size and send-rate threshold.
+- `scripts/verify_run.py` as a scaffold for correlating Kerio logs, Logstash output, and Elasticsearch hits for a test run.
+- `artifacts/runs/` as the default ignored location for generated manifests and verification results.
+
+### Changed
+
+- `scripts/generate_identities.py` now generates a unique random 12-character password per mailbox by default, with mixed case, digits, and special characters.
+- `kerio_import_users.csv` now uses the same field set and `MailAddress` format as the real Kerio users export sample.
+- `kerio_import_users.csv` now follows the sample export defaults for basic users: blank `Description`, `Role=No rights`, zeroed consumption counters, and primary-address-only `MailAddress`.
+- Removed generation of the duplicate `users_<domain>_<date>.csv` reference file to keep run artifacts focused on import and verification inputs.
+- `kerio_import_users.csv` now includes a `Password` column populated with the generated complex passwords for inline-password import.
+- Generated passwords now avoid login, domain, and full-name fragments and use a conservative Kerio-safe special-character set.
+- Replaced the raw `provision_aliases.csv` artifact with `ui_aliases.csv`, which uses Kerio UI-friendly alias local-parts and `deliver_to` targets.
+- `scripts/verify_run.py` now correlates negative delivery cases by sender, nonexistent recipients, and a short timestamp window, and can infer raw failure types from the event message when `event.action` is absent.
+- Release-facing docs now avoid concrete test mailbox examples where a placeholder communicates the same workflow.
+- `.gitignore` now excludes Python bytecode caches in addition to local runtime and run-artifact files.
+- VS Code helper tasks and search settings are now aligned with the current HTTP-based stack and local generated-artifact workflow.
+
+### Fixed
+
+- Raw Kerio `Attempt to deliver to unknown recipient ...` events now populate `email.from.address`, `email.to.address`, `event.action=delivery_unknown_recipient`, `event.outcome=failure`, and `kerio.result=not_delivered` even when they arrive as `process.name=kerio`.
 
 ## [0.1b.4] - 2026-04-04
 

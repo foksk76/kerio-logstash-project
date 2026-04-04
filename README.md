@@ -2,7 +2,7 @@
 
 This project parses Kerio Connect syslog, normalizes events to ECS-like fields, aggregates mail flow by Queue-ID, and sends the results to Elasticsearch for analysis in Kibana or Grafana.
 
-Latest tagged release: `v0.1b.4` (beta).
+Latest tagged release: `v0.1.0`.
 
 ## Components
 
@@ -98,6 +98,40 @@ Stop the stack:
 ```bash
 docker compose down
 ```
+
+## Mail Test Toolkit
+
+The repository also contains a first implementation scaffold for bulk mail-log testing:
+
+- `scripts/generate_identities.py` creates mailbox, alias, and nonexistent-address manifests
+- `scripts/generate_identities.py` also writes:
+  - `kerio_import_users.csv` with the Kerio users export field set plus `Password` for inline-password import
+  - `ui_aliases.csv` for manual alias entry in the Kerio web interface
+- `scripts/send_mail_batch.py` builds and sends constrained-random mail batches
+- `scripts/verify_run.py` checks Kerio logs, Logstash output, and Elasticsearch hits for a run
+- `artifacts/runs/` stores generated manifests and verification results and is ignored by git
+
+Example flow:
+
+```bash
+python scripts/generate_identities.py \
+  --run-id MAILLOG-20260404-01 \
+  --output-dir artifacts/runs/MAILLOG-20260404-01
+
+python scripts/send_mail_batch.py \
+  --run-id MAILLOG-20260404-01 \
+  --identities-file artifacts/runs/MAILLOG-20260404-01/identities.json \
+  --message-count 100 \
+  --send-rate 10 \
+  --output-dir artifacts/runs/MAILLOG-20260404-01
+```
+
+The generated `kerio_import_users.csv` is intended for Kerio Connect user import and mirrors the baseline values of a real Kerio users export, while adding a `Password` column populated with the generated complex per-user passwords. Those passwords are 12 characters long, use upper/lower case letters, digits, and a conservative Kerio-safe symbol set, and avoid fragments from the login, domain, and full name. The remaining defaults stay conservative: blank `Description`, `Role=No rights`, `ConsumedItems=0`, `ConsumedSize (kB)=0`, and only the primary local-part in `MailAddress`. Passwords are still also written to `provision_mailboxes.csv` and `identities.json`; use `--default-password` only when you intentionally want a shared override value. For aliases, use `ui_aliases.csv` for the Kerio web UI and `identities.json` if you need the full raw alias pool programmatically. Any pre-existing control mailbox stays outside the generated import set.
+
+Release hygiene note:
+
+- `artifacts/runs/` may contain generated passwords, test recipient lists, and verification output. Keep those files local and out of git.
+- `.env` is intentionally ignored and should remain local because it carries runtime secrets such as `ELASTIC_PASSWORD`.
 
 ## Notes
 
