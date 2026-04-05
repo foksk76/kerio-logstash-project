@@ -9,6 +9,7 @@ The format is based on Keep a Changelog and this project currently follows a sim
 ### Fixed
 
 - Fixed the GitHub Actions smoke-test workflow shell snippet in `.github/workflows/ci.yml` by replacing an indented heredoc inside the Elasticsearch polling loop with a stable `python -c` check.
+- Fixed the GitHub Actions smoke-test Elasticsearch lookup in `.github/workflows/ci.yml` by replacing a brittle `query_string` search with exact `term` filters on `email.from.address`, `email.to.address`, `event.action`, and `event.outcome`.
 
 ## [0.1.2] - 2026-04-05
 

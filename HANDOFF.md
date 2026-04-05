@@ -6,7 +6,7 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-05 09:47 UTC
+- Updated: 2026-04-05 09:55 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
 - Latest tagged release: `v0.1.2`
@@ -92,6 +92,7 @@ Validated fields:
 - Locally validated the new smoke-test logic with a synthetic RFC5424 packet for `sender.tcp@example.test -> ghost.user.tcp@example.test` and confirmed the indexed event fields match the workflow expectations.
 - Added the project-standard GitHub Actions badge to the top of `README.md`, matching the documentation style used in the sibling `kerio-connect` repository.
 - Fixed the GitHub Actions smoke-test step after the first remote run exposed a heredoc shell syntax bug in the Elasticsearch polling loop; the workflow now uses a stable `python -c` assertion instead.
+- Fixed the GitHub Actions smoke-test Elasticsearch lookup after the next remote run showed that the synthetic document was indexed correctly but the `query_string` search remained too brittle; the workflow now uses exact `term` filters on keyword fields.
 
 ## Suggested Resume Commands
 
