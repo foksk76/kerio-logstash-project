@@ -6,7 +6,7 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-05 10:17 UTC
+- Updated: 2026-04-05 10:26 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
 - Latest tagged release: `v0.1.3`
@@ -95,6 +95,7 @@ Validated fields:
 - Fixed the GitHub Actions smoke-test Elasticsearch lookup after the next remote run showed that the synthetic document was indexed correctly but the `query_string` search remained too brittle; the workflow now uses exact `term` filters on keyword fields.
 - Fixed the GitHub Actions smoke-test startup race after the next remote run showed that the synthetic event could still be sent before Logstash finished binding `5514/tcp`; the workflow now waits for both the pipeline API and a successful TCP connection.
 - Fixed the GitHub Actions smoke-test polling body after the next remote run showed the synthetic event was already indexed but the `_search` request was sending malformed JSON due to over-escaped content inside `curl -d`.
+- Tightened the GitHub Actions smoke-test readiness check again after the next failed release run showed that a TCP connect probe could still pass before Logstash actually started the `tcp` input listener; the workflow now waits for the explicit `Starting tcp input listener` log entry and then pauses briefly before sending the probe.
 
 ## Suggested Resume Commands
 

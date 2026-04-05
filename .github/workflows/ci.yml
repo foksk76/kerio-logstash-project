@@ -222,18 +222,19 @@ jobs:
           print("Elasticsearch templates acknowledged")
           PY
 
-      - name: Wait for Logstash pipeline and TCP listener
+      - name: Wait for Logstash pipeline and ready TCP input
         run: |
           for attempt in $(seq 1 40); do
             if curl -s http://localhost:9600/_node/pipelines?pretty | grep -q 'kerio-connect-main'; then
-              if python3 -c 'import socket; s = socket.create_connection(("127.0.0.1", 5514), timeout=1); s.close()'
+              if docker compose --env-file .env.ci logs --no-color logstash 2>/dev/null | grep -q 'Starting tcp input listener'
               then
+                sleep 2
                 exit 0
               fi
             fi
             sleep 5
           done
-          echo "Logstash pipeline or TCP listener did not become ready in time" >&2
+          echo "Logstash pipeline or TCP input listener did not become ready in time" >&2
           exit 1
 
       - name: Send synthetic Kerio RFC5424 event over TCP
