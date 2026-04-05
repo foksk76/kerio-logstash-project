@@ -11,6 +11,7 @@ The format is based on Keep a Changelog and this project currently follows a sim
 - Fixed the GitHub Actions smoke-test workflow shell snippet in `.github/workflows/ci.yml` by replacing an indented heredoc inside the Elasticsearch polling loop with a stable `python -c` check.
 - Fixed the GitHub Actions smoke-test Elasticsearch lookup in `.github/workflows/ci.yml` by replacing a brittle `query_string` search with exact `term` filters on `email.from.address`, `email.to.address`, `event.action`, and `event.outcome`.
 - Fixed the GitHub Actions smoke-test startup race by waiting for both the Logstash pipeline API and the TCP listener on `127.0.0.1:5514` before sending the synthetic RFC5424 event.
+- Fixed the GitHub Actions smoke-test Elasticsearch polling request by sending valid JSON in the `_search` body instead of an over-escaped payload that caused the synthetic document check to miss an already indexed event.
 
 ## [0.1.2] - 2026-04-05
 
