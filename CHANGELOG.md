@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-04-05
+
 ### Fixed
 
 - Hardened the GitHub Actions smoke-test readiness check in `.github/workflows/ci.yml` by waiting for Logstash to log `Starting tcp input listener` instead of relying on a TCP connect probe that could pass before the input was actually ready.
