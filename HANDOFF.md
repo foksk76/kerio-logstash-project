@@ -6,10 +6,10 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-04 16:10 UTC
+- Updated: 2026-04-05 00:00 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1.0`
+- Latest tagged release: `v0.1.1`
 - Runtime ELK host: redacted from repository; use your local inventory or SSH alias
 - Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
@@ -59,8 +59,8 @@ Validated fields:
 
 ## Release State
 
-- Latest release in this repository: `v0.1.0`
-- Release content includes the live syslog-only workflow, the Kerio mail parser fix, the mail-test toolkit scaffold, and release tracking docs
+- Latest release in this repository: `v0.1.1`
+- Release content includes the live syslog-only workflow, the Kerio mail parser fix, the mail-test toolkit scaffold, the family-standard README, and governance files
 
 ## What Changed In This Session
 
@@ -85,6 +85,8 @@ Validated fields:
 - The real Kerio batch run `MAILLOG-KERIO-DEFAULT-20260404-1539` now verifies cleanly with `passed=100`, `failed=0`, and `unparsed_hits=0`.
 - Raw negative-delivery Kerio events now parse correctly even when they arrive as `process.name=kerio`; Elasticsearch documents now include `email.from.address`, `email.to.address`, `event.action=delivery_unknown_recipient`, `event.outcome=failure`, and `kerio.result=not_delivered`.
 - Live proof event: a synthetic nonexistent recipient in the lab domain at `2026-04-04T16:09:28Z` was stored in `kerio-connect-2026.04.04` with explicit non-delivery fields.
+- Added `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, and `LICENSE` so the repository matches the project-family governance baseline.
+- Reworked `README.md` to the common project-family structure with a copy-paste Quick Start, example input/output, verification checklist, troubleshooting section, and explicit governance cross-links.
 
 ## Suggested Resume Commands
 

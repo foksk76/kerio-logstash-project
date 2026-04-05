@@ -6,6 +6,19 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-05
+
+### Added
+
+- `CONTRIBUTING.md` with contribution expectations for documentation, configuration, and safe sample data.
+- `SECURITY.md` with private vulnerability reporting guidance and safe-sharing rules.
+- `SUPPORT.md` with issue-reporting expectations and best-effort support guidance.
+- `LICENSE` with the Apache 2.0 license text.
+
+### Changed
+
+- Reworked `README.md` to the family-wide documentation standard with a reproducible Quick Start, example input/output, verification checklist, troubleshooting guidance, and governance links.
+
 ## [0.1.0] - 2026-04-04
 
 ### Added
