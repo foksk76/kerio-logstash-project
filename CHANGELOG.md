@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-04-05
+
 ### Fixed
 
 - Fixed the GitHub Actions smoke-test workflow shell snippet in `.github/workflows/ci.yml` by replacing an indented heredoc inside the Elasticsearch polling loop with a stable `python -c` check.

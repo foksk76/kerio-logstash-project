@@ -6,10 +6,10 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-05 10:12 UTC
+- Updated: 2026-04-05 10:17 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1.2`
+- Latest tagged release: `v0.1.3`
 - Runtime ELK host: redacted from repository; use your local inventory or SSH alias
 - Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
