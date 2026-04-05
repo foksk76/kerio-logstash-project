@@ -6,6 +6,19 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-05
+
+### Added
+
+- `.github/workflows/ci.yml` with a repository-wide CI pipeline for static checks, Compose validation, Logstash config validation, and a synthetic end-to-end ingestion smoke test.
+
+### Changed
+
+- Replaced the old `pylint-only` GitHub Actions workflow with a broader CI workflow that also validates shell scripts, Elasticsearch templates, README governance links, Docker Compose configuration, and Logstash startup behavior.
+- `.gitignore` now also excludes `.env.ci` for local CI-style test runs.
+- The synthetic end-to-end smoke test now sends its RFC5424 probe over `5514/tcp` for more deterministic runner behavior while still verifying the same parsing path and indexed fields.
+- `README.md` now includes the project-standard GitHub Actions badge at the top of the document, aligned with the rest of the repository family.
+
 ## [0.1.1] - 2026-04-05
 
 ### Added

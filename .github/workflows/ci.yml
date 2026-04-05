@@ -1,0 +1,316 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Static Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install Faker pylint
+
+      - name: Compile Python scripts
+        run: python -m py_compile scripts/*.py
+
+      - name: Lint Python scripts
+        run: pylint --errors-only scripts
+
+      - name: Validate shell scripts
+        run: |
+          bash -n docker/kibana/generate-service-token.sh
+          bash -n docker/kibana/start-with-service-token.sh
+
+      - name: Validate Elasticsearch templates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          template_paths = sorted(Path("elasticsearch/templates").glob("*.json"))
+          if not template_paths:
+              raise SystemExit("No Elasticsearch templates found")
+
+          for path in template_paths:
+              json.loads(path.read_text(encoding="utf-8"))
+
+          print(f"Validated {len(template_paths)} Elasticsearch template files")
+          PY
+
+      - name: Validate README structure and governance links
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          readme = Path("README.md").read_text(encoding="utf-8")
+
+          required_sections = [
+              "# Kerio Connect Logstash Project",
+              "## Why this repository exists",
+              "## Project family",
+              "## Where this repository fits",
+              "## Main use cases",
+              "## Audience",
+              "## Architecture / Flow",
+              "## Requirements",
+              "## Repository structure",
+              "## Quick Start",
+              "### 1. Clone the repository",
+              "### 2. Prepare the environment",
+              "### 3. Run the project",
+              "### 4. Verify the result",
+              "### 5. Example outcome",
+              "## Example input",
+              "## Example output",
+              "## Verification checklist",
+              "## Troubleshooting",
+              "## Limitations / Non-goals",
+              "## Notes",
+              "## Roadmap",
+              "## Changelog",
+              "## Handoff",
+              "## Contributing",
+              "## Security",
+              "## Support",
+              "## License",
+          ]
+
+          missing_sections = [item for item in required_sections if item not in readme]
+          if missing_sections:
+              raise SystemExit(f"README is missing required sections: {missing_sections}")
+
+          required_links = {
+              "[CONTRIBUTING.md](./CONTRIBUTING.md)": "CONTRIBUTING.md",
+              "[SECURITY.md](./SECURITY.md)": "SECURITY.md",
+              "[SUPPORT.md](./SUPPORT.md)": "SUPPORT.md",
+              "[LICENSE](./LICENSE)": "LICENSE",
+              "[CHANGELOG.md](./CHANGELOG.md)": "CHANGELOG.md",
+              "[HANDOFF.md](./HANDOFF.md)": "HANDOFF.md",
+              "[NEXT_STEPS.md](./NEXT_STEPS.md)": "NEXT_STEPS.md",
+          }
+
+          missing_links = [link for link in required_links if link not in readme]
+          if missing_links:
+              raise SystemExit(f"README is missing required links: {missing_links}")
+
+          missing_files = [path for path in required_links.values() if not Path(path).exists()]
+          if missing_files:
+              raise SystemExit(f"Required governance files are missing: {missing_files}")
+
+          print("README structure and governance links look good")
+          PY
+
+  stack-validate:
+    name: Compose and Logstash Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare CI environment
+        run: |
+          cat > .env.ci <<'EOF'
+          ELASTIC_PASSWORD=CiPass-2026!
+          EOF
+
+      - name: Validate docker compose configuration
+        run: docker compose --env-file .env.ci config >/tmp/compose.out
+
+      - name: Validate Logstash pipeline configuration
+        run: |
+          docker compose --env-file .env.ci run --no-deps --rm logstash \
+            /usr/share/logstash/bin/logstash \
+            --path.settings /usr/share/logstash/config \
+            --config.test_and_exit \
+            -f /usr/share/logstash/pipeline/kerio-connect-main.conf
+
+      - name: Collect validation diagnostics
+        if: failure()
+        run: |
+          mkdir -p ci-artifacts
+          cp /tmp/compose.out ci-artifacts/compose-config.txt 2>/dev/null || true
+          docker compose --env-file .env.ci ps > ci-artifacts/compose-ps.txt || true
+          docker compose --env-file .env.ci logs --no-color > ci-artifacts/compose-logs.txt || true
+
+      - name: Upload validation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-validation-diagnostics
+          path: ci-artifacts
+
+      - name: Clean up validation containers
+        if: always()
+        run: docker compose --env-file .env.ci down -v --remove-orphans
+
+  smoke-test:
+    name: Synthetic End-to-End Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs:
+      - static-checks
+      - stack-validate
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare CI environment
+        run: |
+          cat > .env.ci <<'EOF'
+          ELASTIC_PASSWORD=CiPass-2026!
+          EOF
+
+      - name: Start Elasticsearch and Logstash
+        run: docker compose --env-file .env.ci up -d elasticsearch logstash
+
+      - name: Wait for Elasticsearch
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl -s -u elastic:CiPass-2026! http://localhost:9200 >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Elasticsearch did not become ready in time" >&2
+          exit 1
+
+      - name: Install Elasticsearch templates
+        run: |
+          response_one="$(curl -s -u elastic:CiPass-2026! -H 'Content-Type: application/json' \
+            -X PUT http://localhost:9200/_index_template/kerio-connect-ecs \
+            --data-binary @elasticsearch/templates/kerio-connect-ecs-template.json)"
+          response_two="$(curl -s -u elastic:CiPass-2026! -H 'Content-Type: application/json' \
+            -X PUT http://localhost:9200/_index_template/kerio-flow-template \
+            --data-binary @elasticsearch/templates/kerio-flow-template.json)"
+
+          RESPONSE_ONE="${response_one}" RESPONSE_TWO="${response_two}" python - <<'PY'
+          import json
+          import os
+
+          for key in ("RESPONSE_ONE", "RESPONSE_TWO"):
+              payload = json.loads(os.environ[key])
+              if not payload.get("acknowledged"):
+                  raise SystemExit(f"Template install failed for {key}: {payload}")
+
+          print("Elasticsearch templates acknowledged")
+          PY
+
+      - name: Wait for Logstash pipeline
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl -s http://localhost:9600/_node/pipelines?pretty | grep -q 'kerio-connect-main'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Logstash pipeline did not become ready in time" >&2
+          exit 1
+
+      - name: Send synthetic Kerio RFC5424 event over TCP
+        run: |
+          python - <<'PY'
+          import socket
+
+          payload = (
+              "<21>1 2026-04-05T00:00:00Z kerio-connect kerio - - - "
+              "Attempt to deliver to unknown recipient <ghost.user.001@example.test>, "
+              "from <sender@example.test>, IP address 192.0.2.10\n"
+          )
+
+          sock = socket.create_connection(("127.0.0.1", 5514), timeout=10)
+          sock.sendall(payload.encode("utf-8"))
+          sock.close()
+          PY
+
+      - name: Wait for parsed document in Elasticsearch
+        run: |
+          for attempt in $(seq 1 30); do
+            response="$(curl -s -u elastic:CiPass-2026! \
+              http://localhost:9200/kerio-connect-*/_search \
+              -H 'Content-Type: application/json' \
+              -d '{\"size\":1,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"query_string\":{\"query\":\"\\\"sender@example.test\\\" AND \\\"ghost.user.001@example.test\\\"\"}},\"_source\":[\"event.action\",\"event.outcome\",\"email.from.address\",\"email.to.address\",\"kerio.result\",\"network.protocol\"]}')"
+
+            if RESPONSE="${response}" python - <<'PY'
+              import json
+              import os
+              import sys
+
+              payload = json.loads(os.environ["RESPONSE"])
+              hits = payload.get("hits", {}).get("hits", [])
+              if not hits:
+                  sys.exit(1)
+
+              source = hits[0].get("_source", {})
+              if source.get("event", {}).get("action") != "delivery_unknown_recipient":
+                  sys.exit(1)
+              if source.get("event", {}).get("outcome") != "failure":
+                  sys.exit(1)
+              if source.get("email", {}).get("from", {}).get("address") != "sender@example.test":
+                  sys.exit(1)
+              if source.get("email", {}).get("to", {}).get("address") != "ghost.user.001@example.test":
+                  sys.exit(1)
+              if source.get("kerio", {}).get("result") != "not_delivered":
+                  sys.exit(1)
+              if source.get("network", {}).get("protocol") != "smtp":
+                  sys.exit(1)
+            PY
+            then
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Synthetic event was not indexed as expected" >&2
+          exit 1
+
+      - name: Collect smoke-test diagnostics
+        if: failure()
+        run: |
+          mkdir -p ci-artifacts
+          docker compose --env-file .env.ci ps > ci-artifacts/compose-ps.txt || true
+          docker compose --env-file .env.ci logs --no-color > ci-artifacts/compose-logs.txt || true
+          curl -s http://localhost:9600/_node/pipelines?pretty > ci-artifacts/logstash-pipelines.json || true
+          curl -s -u elastic:CiPass-2026! http://localhost:9200/_cat/indices?v > ci-artifacts/elastic-indices.txt || true
+          curl -s -u elastic:CiPass-2026! \
+            http://localhost:9200/kerio-connect-*/_search?pretty \
+            -H 'Content-Type: application/json' \
+            -d '{"size":5,"sort":[{"@timestamp":{"order":"desc"}}]}' > ci-artifacts/elastic-last-events.json || true
+
+      - name: Upload smoke-test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-diagnostics
+          path: ci-artifacts
+
+      - name: Shut down smoke-test stack
+        if: always()
+        run: docker compose --env-file .env.ci down -v --remove-orphans

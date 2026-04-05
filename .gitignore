@@ -1,4 +1,5 @@
 .env
+.env.ci
 .vscode/*.log
 data/
 __pycache__/

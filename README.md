@@ -2,6 +2,8 @@
 
 Parsing, normalization, enrichment, and mail-flow correlation for Kerio Connect syslog into Elasticsearch.
 
+[![CI](https://github.com/foksk76/kerio-logstash-project/actions/workflows/ci.yml/badge.svg)](https://github.com/foksk76/kerio-logstash-project/actions/workflows/ci.yml)
+
 ## Why this repository exists
 
 Kerio Connect can emit useful operational, security, and mail-flow events over syslog, but those logs are not ready for dashboards or repeatable analysis as-is.

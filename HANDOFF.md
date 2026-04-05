@@ -6,10 +6,10 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-05 00:00 UTC
+- Updated: 2026-04-05 09:43 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1.1`
+- Latest tagged release: `v0.1.2`
 - Runtime ELK host: redacted from repository; use your local inventory or SSH alias
 - Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
@@ -59,7 +59,7 @@ Validated fields:
 
 ## Release State
 
-- Latest release in this repository: `v0.1.1`
+- Latest release in this repository: `v0.1.2`
 - Release content includes the live syslog-only workflow, the Kerio mail parser fix, the mail-test toolkit scaffold, the family-standard README, and governance files
 
 ## What Changed In This Session
@@ -87,6 +87,10 @@ Validated fields:
 - Live proof event: a synthetic nonexistent recipient in the lab domain at `2026-04-04T16:09:28Z` was stored in `kerio-connect-2026.04.04` with explicit non-delivery fields.
 - Added `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, and `LICENSE` so the repository matches the project-family governance baseline.
 - Reworked `README.md` to the common project-family structure with a copy-paste Quick Start, example input/output, verification checklist, troubleshooting section, and explicit governance cross-links.
+- Replaced the old GitHub Actions `pylint` workflow with `.github/workflows/ci.yml`, which now covers static checks, Docker Compose validation, Logstash config validation, and a synthetic end-to-end smoke test against Elasticsearch.
+- Switched the CI smoke-test probe from UDP to TCP on `5514` after confirming that TCP indexing is more deterministic in the local validation environment while still exercising the same Kerio parser path.
+- Locally validated the new smoke-test logic with a synthetic RFC5424 packet for `sender.tcp@example.test -> ghost.user.tcp@example.test` and confirmed the indexed event fields match the workflow expectations.
+- Added the project-standard GitHub Actions badge to the top of `README.md`, matching the documentation style used in the sibling `kerio-connect` repository.
 
 ## Suggested Resume Commands
 
