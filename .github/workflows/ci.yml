@@ -257,30 +257,7 @@ jobs:
               -H 'Content-Type: application/json' \
               -d '{\"size\":1,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"query_string\":{\"query\":\"\\\"sender@example.test\\\" AND \\\"ghost.user.001@example.test\\\"\"}},\"_source\":[\"event.action\",\"event.outcome\",\"email.from.address\",\"email.to.address\",\"kerio.result\",\"network.protocol\"]}')"
 
-            if RESPONSE="${response}" python - <<'PY'
-              import json
-              import os
-              import sys
-
-              payload = json.loads(os.environ["RESPONSE"])
-              hits = payload.get("hits", {}).get("hits", [])
-              if not hits:
-                  sys.exit(1)
-
-              source = hits[0].get("_source", {})
-              if source.get("event", {}).get("action") != "delivery_unknown_recipient":
-                  sys.exit(1)
-              if source.get("event", {}).get("outcome") != "failure":
-                  sys.exit(1)
-              if source.get("email", {}).get("from", {}).get("address") != "sender@example.test":
-                  sys.exit(1)
-              if source.get("email", {}).get("to", {}).get("address") != "ghost.user.001@example.test":
-                  sys.exit(1)
-              if source.get("kerio", {}).get("result") != "not_delivered":
-                  sys.exit(1)
-              if source.get("network", {}).get("protocol") != "smtp":
-                  sys.exit(1)
-            PY
+            if RESPONSE="${response}" python -c 'import json, os, sys; payload = json.loads(os.environ["RESPONSE"]); hits = payload.get("hits", {}).get("hits", []); source = hits[0].get("_source", {}) if hits else None; sys.exit(0 if source and source.get("event", {}).get("action") == "delivery_unknown_recipient" and source.get("event", {}).get("outcome") == "failure" and source.get("email", {}).get("from", {}).get("address") == "sender@example.test" and source.get("email", {}).get("to", {}).get("address") == "ghost.user.001@example.test" and source.get("kerio", {}).get("result") == "not_delivered" and source.get("network", {}).get("protocol") == "smtp" else 1)'
             then
               exit 0
             fi
