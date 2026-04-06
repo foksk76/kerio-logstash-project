@@ -104,6 +104,36 @@ def fetch_elastic_query_string_hits(
     return fetch_elastic_hits(elastic_url, elastic_user, elastic_password, index_pattern, request_body)
 
 
+def fetch_correlated_message_hits(
+    elastic_url: str,
+    elastic_user: str,
+    elastic_password: str,
+    index_pattern: str,
+    subject: str,
+    message_id: str,
+    event_actions: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    filters: list[dict[str, Any]] = []
+    if event_actions:
+        filters.append({"terms": {"event.action": event_actions}})
+
+    request_body = {
+        "size": 50,
+        "sort": [{"@timestamp": "desc"}],
+        "query": {
+            "bool": {
+                "filter": filters,
+                "should": [
+                    {"term": {"email.subject.keyword": subject}},
+                    {"term": {"message_id": message_id}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+    }
+    return fetch_elastic_hits(elastic_url, elastic_user, elastic_password, index_pattern, request_body)
+
+
 def parse_utc_timestamp(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -247,6 +277,7 @@ def evaluate_message(
     raw_outcomes = raw_field_values(raw_hits, ("event", "outcome"))
     raw_results = raw_field_values(raw_hits, ("kerio", "result"))
     unparsed_tags = sorted({tag for line in matched_logstash_lines for tag in UNPARSED_TAG_RE.findall(line)})
+    raw_positive_confirmed = "message_received" in raw_actions and "message_sent" in raw_actions
 
     kerio_recv_seen = any("Recv:" in line for line in matched_kerio_lines)
     kerio_sent_seen = any("Sent:" in line for line in matched_kerio_lines)
@@ -275,6 +306,8 @@ def evaluate_message(
         passed = False
     if expected.get("success_flow") and not elastic_flow_hit:
         passed = False
+    if expected.get("success_flow") and not raw_positive_confirmed:
+        passed = False
     if expected.get("raw_failure") and not raw_actions:
         passed = False
     if expected.get("raw_failure") and "failure" not in raw_outcomes:
@@ -293,6 +326,7 @@ def evaluate_message(
         "kerio_recv_seen": kerio_recv_seen,
         "kerio_sent_seen": kerio_sent_seen,
         "elastic_flow_hit": elastic_flow_hit,
+        "elastic_raw_positive_confirmed": raw_positive_confirmed,
         "elastic_raw_hits": raw_actions,
         "elastic_raw_outcomes": raw_outcomes,
         "elastic_raw_results": raw_results,
@@ -346,19 +380,22 @@ def main() -> int:
         query_string = f"\"{subject}\" OR \"{message_id}\""
 
         try:
-            flow_hits = fetch_elastic_query_string_hits(
+            flow_hits = fetch_correlated_message_hits(
                 elastic_url=args.elastic_url,
                 elastic_user=args.elastic_user,
                 elastic_password=password,
                 index_pattern="kerio-flow-*",
-                query_string=query_string,
+                subject=subject,
+                message_id=message_id,
+                event_actions=["message_flow_aggregated"],
             )
-            raw_hits = fetch_elastic_query_string_hits(
+            raw_hits = fetch_correlated_message_hits(
                 elastic_url=args.elastic_url,
                 elastic_user=args.elastic_user,
                 elastic_password=password,
                 index_pattern="kerio-connect-*",
-                query_string=query_string,
+                subject=subject,
+                message_id=message_id,
             )
             raw_hits = merge_hits(
                 raw_hits,

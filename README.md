@@ -118,6 +118,7 @@ If you need:
 ├── scripts/
 │   ├── generate_identities.py
 │   ├── mailtest_common.py
+│   ├── run_audit_matrix.py
 │   ├── send_mail_batch.py
 │   └── verify_run.py
 └── artifacts/
@@ -308,6 +309,35 @@ Expected result:
 - at least one `kerio-connect-YYYY.MM.DD` index is listed;
 - the raw index has a non-zero `docs.count` after the synthetic test event;
 - Kibana is reachable at `http://localhost/`.
+
+## Audit Matrix Run
+
+For live Kerio audit validation, the repository also ships `scripts/run_audit_matrix.py`.
+It reads an existing `identities.json`, exercises the available Kerio authentication paths, and verifies the resulting successful authentication entries directly in `audit.log` over SSH.
+
+The current automated matrix covers:
+
+- `HTTP/WebAdmin` through the Kerio admin JSON-RPC API;
+- `HTTP/WebMail` through the Kerio client JSON-RPC API;
+- `SMTP` through authenticated submission on `587`;
+- `IMAP` through `993`;
+- `POP3` through `995`.
+
+`HTTP/KOFF` is included in the run output as a manual-only case because it requires Kerio Outlook Connector / Outlook on the stand.
+
+Example:
+
+```bash
+python3 scripts/run_audit_matrix.py \
+  --run-id AUDIT-MATRIX-20260406 \
+  --identities-file artifacts/runs/LIVE-PLUS10-20260406-124549/identities.json \
+  --output-dir artifacts/runs/AUDIT-MATRIX-20260406/audit
+```
+
+Expected artifacts:
+
+- `audit_results.json` with per-protocol pass / fail / skip details;
+- `audit_summary.md` with a human-readable matrix summary.
 
 ## Example input
 

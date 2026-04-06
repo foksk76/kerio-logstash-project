@@ -6,6 +6,24 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-04-06
+
+### Added
+
+- `scripts/run_audit_matrix.py` to exercise Kerio Connect audit authentication events from an existing `identities.json` and verify both `audit.log` lines over SSH and indexed audit documents in Elasticsearch.
+
+### Changed
+
+- `README.md` now documents the live audit matrix workflow alongside the mail-flow toolkit.
+- `scripts/kerio_api.py` now allows custom Kerio application metadata so API-driven runs can leave traceable audit markers.
+- `scripts/verify_run.py` now correlates messages by exact `subject` / `message_id` terms and requires raw positive `message_received` plus `message_sent` evidence for successful flows.
+
+### Fixed
+
+- The audit parser in `logstash/pipeline/kerio-connect-main.conf` now accepts the live Kerio auth format arriving as `process.name=kerio` and normalizes `HTTP/WebAdmin`, `HTTP/WebMail`, `SMTP`, `IMAP`, and `POP3` into `kerio.protocol` plus `network.protocol`.
+- Successful raw `Recv` / `Sent` mail events are no longer dropped after aggregation; they are kept in `kerio-connect-*` with `kerio.log_type=mail_raw`, while aggregate flow records are tagged as `kerio.log_type=flow_aggregate`.
+- The audit matrix verification now waits for per-case Elasticsearch confirmation, which validates all five automated Kerio authentication protocols end to end on the live stand.
+
 ## [0.1.5] - 2026-04-06
 
 ### Added

@@ -75,11 +75,17 @@ class KerioAdminClient:
         password: str,
         verify_tls: bool = False,
         timeout: int = DEFAULT_API_TIMEOUT,
+        application_name: str = "kerio-logstash managed provisioning",
+        application_vendor: str = "OpenAI",
+        application_version: str = "1.0",
     ) -> None:
         self.api_url = api_url
         self.username = username
         self.password = password
         self.timeout = timeout
+        self.application_name = application_name
+        self.application_vendor = application_vendor
+        self.application_version = application_version
         self.context = ssl.create_default_context() if verify_tls else ssl._create_unverified_context()
         self.token: str | None = None
         self.cookie: str | None = None
@@ -142,9 +148,9 @@ class KerioAdminClient:
                 "userName": self.username,
                 "password": self.password,
                 "application": {
-                    "name": "kerio-logstash managed provisioning",
-                    "vendor": "OpenAI",
-                    "version": "1.0",
+                    "name": self.application_name,
+                    "vendor": self.application_vendor,
+                    "version": self.application_version,
                 },
             },
         )
