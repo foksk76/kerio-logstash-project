@@ -202,6 +202,20 @@ def infer_raw_action(hit: dict[str, Any]) -> str | None:
     return None
 
 
+def raw_field_values(raw_hits: list[dict[str, Any]], field_path: tuple[str, ...]) -> list[str]:
+    values: set[str] = set()
+    for hit in raw_hits:
+        value: Any = hit.get("_source", {})
+        for key in field_path:
+            if not isinstance(value, dict):
+                value = None
+                break
+            value = value.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    return sorted(values)
+
+
 def load_kerio_lines(host: str, container: str, log_path: str, run_id: str) -> list[str]:
     command = f"docker exec {container} sh -lc \"grep -F '{run_id}' {log_path} || true\""
     return [line for line in run_ssh(host, command).splitlines() if line.strip()]
@@ -230,6 +244,8 @@ def evaluate_message(
             if infer_raw_action(hit)
         }
     )
+    raw_outcomes = raw_field_values(raw_hits, ("event", "outcome"))
+    raw_results = raw_field_values(raw_hits, ("kerio", "result"))
     unparsed_tags = sorted({tag for line in matched_logstash_lines for tag in UNPARSED_TAG_RE.findall(line)})
 
     kerio_recv_seen = any("Recv:" in line for line in matched_kerio_lines)
@@ -238,9 +254,32 @@ def evaluate_message(
 
     passed = True
     expected = message["expected"]
+    send_error_text = str(message.get("send_error") or "").lower()
+    raw_failure_confirmed = bool(raw_actions) and "failure" in raw_outcomes
+    if "delivery_unknown_recipient" in raw_actions and "not_delivered" not in raw_results:
+        raw_failure_confirmed = False
+
+    tolerated_send_error = (
+        message.get("send_status") == "error"
+        and expected.get("raw_failure")
+        and not expected.get("success_flow")
+        and raw_failure_confirmed
+        and (
+            "550" in send_error_text
+            or "does not exist" in send_error_text
+            or "unknown recipient" in send_error_text
+        )
+    )
+
+    if message.get("send_status") == "error" and not tolerated_send_error:
+        passed = False
     if expected.get("success_flow") and not elastic_flow_hit:
         passed = False
     if expected.get("raw_failure") and not raw_actions:
+        passed = False
+    if expected.get("raw_failure") and "failure" not in raw_outcomes:
+        passed = False
+    if "delivery_unknown_recipient" in raw_actions and "not_delivered" not in raw_results:
         passed = False
     if unparsed_tags:
         passed = False
@@ -255,6 +294,8 @@ def evaluate_message(
         "kerio_sent_seen": kerio_sent_seen,
         "elastic_flow_hit": elastic_flow_hit,
         "elastic_raw_hits": raw_actions,
+        "elastic_raw_outcomes": raw_outcomes,
+        "elastic_raw_results": raw_results,
         "send_status": message.get("send_status"),
         "send_error": message.get("send_error"),
         "logstash_unparsed_tags": unparsed_tags,

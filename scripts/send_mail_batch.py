@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import random
 import smtplib
 import sys
@@ -16,7 +15,27 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.mailtest_common import allocate_scenarios, ensure_dir, load_json, utc_now_precise_iso, write_jsonl
+from scripts.mailtest_common import (
+    DEFAULT_SCENARIO_PROFILE,
+    SCENARIO_WEIGHT_PROFILES,
+    allocate_scenarios,
+    ensure_dir,
+    load_json,
+    scenario_weights_for_profile,
+    utc_now_precise_iso,
+    write_jsonl,
+)
+
+DEFAULT_MESSAGE_COUNT = 60
+DEFAULT_SEND_RATE = 4.0
+DEFAULT_MAILING_MIN_RECIPIENTS = 2
+DEFAULT_MAILING_MAX_RECIPIENTS = 4
+DEFAULT_MAILING_MAX_NONEXISTENT = 0
+DEFAULT_NONEXISTENT_MIN_RECIPIENTS = 1
+DEFAULT_NONEXISTENT_MAX_RECIPIENTS = 1
+DEFAULT_ALIASES_MIN_RECIPIENTS = 1
+DEFAULT_ALIASES_MAX_RECIPIENTS = 1
+DEFAULT_MIXED_EXTRA_MAX = 1
 
 
 class RateLimiter:
@@ -38,8 +57,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Send a constrained-random Kerio mail batch.")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--identities-file", type=Path, required=True)
-    parser.add_argument("--message-count", type=int, default=100)
-    parser.add_argument("--send-rate", type=float, default=10.0)
+    parser.add_argument("--message-count", type=int, default=DEFAULT_MESSAGE_COUNT)
+    parser.add_argument("--send-rate", type=float, default=DEFAULT_SEND_RATE)
+    parser.add_argument(
+        "--scenario-profile",
+        default=DEFAULT_SCENARIO_PROFILE,
+        choices=tuple(SCENARIO_WEIGHT_PROFILES.keys()),
+    )
+    parser.add_argument("--mailing-min-recipients", type=int, default=DEFAULT_MAILING_MIN_RECIPIENTS)
+    parser.add_argument("--mailing-max-recipients", type=int, default=DEFAULT_MAILING_MAX_RECIPIENTS)
+    parser.add_argument("--mailing-max-nonexistent", type=int, default=DEFAULT_MAILING_MAX_NONEXISTENT)
+    parser.add_argument("--nonexistent-min-recipients", type=int, default=DEFAULT_NONEXISTENT_MIN_RECIPIENTS)
+    parser.add_argument("--nonexistent-max-recipients", type=int, default=DEFAULT_NONEXISTENT_MAX_RECIPIENTS)
+    parser.add_argument("--aliases-min-recipients", type=int, default=DEFAULT_ALIASES_MIN_RECIPIENTS)
+    parser.add_argument("--aliases-max-recipients", type=int, default=DEFAULT_ALIASES_MAX_RECIPIENTS)
+    parser.add_argument("--mixed-extra-max", type=int, default=DEFAULT_MIXED_EXTRA_MAX)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--smtp-host", default="127.0.0.1")
     parser.add_argument("--smtp-port", type=int, default=25)
@@ -49,8 +81,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def alias_targets(alias_pool: list[dict[str, str]]) -> dict[str, str]:
-    return {item["alias"]: item["target"] for item in alias_pool}
+def validate_range(name: str, minimum: int, maximum: int) -> None:
+    if minimum < 0:
+        raise ValueError(f"{name} minimum must be zero or greater")
+    if maximum < minimum:
+        raise ValueError(f"{name} maximum must be greater than or equal to minimum")
+
+
+def validate_args(args: argparse.Namespace) -> None:
+    validate_range("mailing recipients", args.mailing_min_recipients, args.mailing_max_recipients)
+    validate_range("nonexistent recipients", args.nonexistent_min_recipients, args.nonexistent_max_recipients)
+    validate_range("alias recipients", args.aliases_min_recipients, args.aliases_max_recipients)
+    if args.mailing_max_nonexistent < 0:
+        raise ValueError("mailing-max-nonexistent must be zero or greater")
+    if args.mixed_extra_max < 0:
+        raise ValueError("mixed-extra-max must be zero or greater")
+
+
+def choose_sample(
+    rng: random.Random,
+    candidates: list[str],
+    minimum: int,
+    maximum: int,
+    label: str,
+) -> list[str]:
+    if len(candidates) < minimum:
+        raise RuntimeError(f"Not enough {label}: need at least {minimum}, have {len(candidates)}")
+    count = rng.randint(minimum, min(maximum, len(candidates)))
+    return sorted(rng.sample(candidates, count))
 
 
 def choose_sender(rng: random.Random, sender_pool: list[str]) -> str:
@@ -61,8 +119,7 @@ def choose_real_recipients(rng: random.Random, real_pool: list[str], sender: str
     candidates = [address for address in real_pool if address != sender]
     if not candidates:
         raise RuntimeError("No real recipients available after excluding sender")
-    count = rng.randint(minimum, min(maximum, len(candidates)))
-    return sorted(rng.sample(candidates, count))
+    return choose_sample(rng, candidates, minimum, maximum, "real recipients")
 
 
 def choose_alias_recipients(
@@ -75,13 +132,11 @@ def choose_alias_recipients(
     candidates = [item["alias"] for item in alias_pool if item["target"] != sender]
     if not candidates:
         candidates = [item["alias"] for item in alias_pool]
-    count = rng.randint(minimum, min(maximum, len(candidates)))
-    return sorted(rng.sample(candidates, count))
+    return choose_sample(rng, candidates, minimum, maximum, "alias recipients")
 
 
 def choose_nonexistent_recipients(rng: random.Random, nonexistent_pool: list[str], minimum: int, maximum: int) -> list[str]:
-    count = rng.randint(minimum, min(maximum, len(nonexistent_pool)))
-    return sorted(rng.sample(nonexistent_pool, count))
+    return choose_sample(rng, nonexistent_pool, minimum, maximum, "nonexistent recipients")
 
 
 def plan_message(
@@ -93,6 +148,7 @@ def plan_message(
     real_pool: list[str],
     alias_pool: list[dict[str, str]],
     nonexistent_pool: list[str],
+    args: argparse.Namespace,
 ) -> dict[str, Any]:
     sender = choose_sender(rng, sender_pool)
     recipients: list[str] = []
@@ -102,24 +158,39 @@ def plan_message(
         recipients = choose_real_recipients(rng, real_pool, sender, 1, 1)
         expected["success_flow"] = True
     elif scenario == "mailing":
-        available_real = [address for address in real_pool if address != sender]
-        min_real = max(1, math.ceil(len(available_real) * 0.1))
-        recipients = choose_real_recipients(rng, real_pool, sender, min_real, len(available_real))
-        fake_count = rng.randint(0, 3)
+        recipients = choose_real_recipients(
+            rng,
+            real_pool,
+            sender,
+            args.mailing_min_recipients,
+            args.mailing_max_recipients,
+        )
+        fake_count = rng.randint(0, args.mailing_max_nonexistent)
         if fake_count:
             recipients.extend(choose_nonexistent_recipients(rng, nonexistent_pool, fake_count, fake_count))
             expected["raw_failure"] = True
         expected["success_flow"] = True
     elif scenario == "nonexistent":
-        recipients = choose_nonexistent_recipients(rng, nonexistent_pool, 1, 3)
+        recipients = choose_nonexistent_recipients(
+            rng,
+            nonexistent_pool,
+            args.nonexistent_min_recipients,
+            args.nonexistent_max_recipients,
+        )
         expected["raw_failure"] = True
     elif scenario == "aliases_only":
-        recipients = choose_alias_recipients(rng, alias_pool, sender, 1, 2)
+        recipients = choose_alias_recipients(
+            rng,
+            alias_pool,
+            sender,
+            args.aliases_min_recipients,
+            args.aliases_max_recipients,
+        )
         expected["success_flow"] = True
     elif scenario == "real_plus_aliases":
         recipients = choose_real_recipients(rng, real_pool, sender, 1, 1)
         recipients.extend(choose_alias_recipients(rng, alias_pool, sender, 1, 1))
-        extra_budget = rng.randint(0, 3)
+        extra_budget = rng.randint(0, args.mixed_extra_max)
         for _ in range(extra_budget):
             if rng.random() < 0.5:
                 recipient = choose_real_recipients(rng, real_pool, sender, 1, 1)[0]
@@ -190,6 +261,7 @@ def send_one_message(
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    validate_args(args)
     rng = random.Random(args.seed)
 
     identities = load_json(args.identities_file)
@@ -198,7 +270,8 @@ def main() -> int:
     alias_pool = identities["alias_pool"]
     nonexistent_pool = identities["nonexistent_pool"]
 
-    allocations = allocate_scenarios(args.message_count)
+    scenario_weights = scenario_weights_for_profile(args.scenario_profile)
+    allocations = allocate_scenarios(args.message_count, scenario_weights)
     scenario_stream: list[str] = []
     for scenario, count in allocations.items():
         scenario_stream.extend([scenario] * count)
@@ -218,6 +291,7 @@ def main() -> int:
             real_pool=real_pool,
             alias_pool=alias_pool,
             nonexistent_pool=nonexistent_pool,
+            args=args,
         )
         message_plan["send_rate_limit"] = args.send_rate
         message_plan["planned_at"] = utc_now_precise_iso()
@@ -242,7 +316,19 @@ def main() -> int:
 
     write_jsonl(args.output_dir / "messages.jsonl", messages)
 
-    print(json.dumps({"run_id": args.run_id, "message_count": len(messages), "allocations": allocations}, indent=2))
+    print(
+        json.dumps(
+            {
+                "run_id": args.run_id,
+                "message_count": len(messages),
+                "send_rate": args.send_rate,
+                "scenario_profile": args.scenario_profile,
+                "scenario_weights": scenario_weights,
+                "allocations": allocations,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

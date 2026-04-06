@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import argparse
-import csv
+import hashlib
 import random
 import string
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.kerio_api import DEFAULT_KERIO_API_URL, KerioAdminClient, env_or_dotenv
 from scripts.mailtest_common import ensure_dir, slugify_ascii, utc_now_iso, write_json
 
 try:
@@ -57,37 +59,17 @@ FALLBACK_LAST_NAMES = [
 ]
 
 DEFAULT_PASSWORD_LENGTH = 12
+DEFAULT_CONTROL_MAILBOX = "doge"
 # Kerio documents this class of allowed non-alphanumeric characters for
-# password-complexity checks. We use a conservative subset that is CSV-safe.
+# password-complexity checks. We use a conservative ASCII subset.
 PASSWORD_SPECIALS = "!#$%^&*_-+=?"
-KERIO_USER_FIELDNAMES = [
-    "Name",
-    "Password",
-    "FullName",
-    "Description",
-    "Enable",
-    "DataSource",
-    "Authentication",
-    "Role",
-    "Groups",
-    "MailAddress",
-    "EmailForwarding",
-    "ItemLimit",
-    "DiskSizeLimit (kB)",
-    "ConsumedItems",
-    "ConsumedSize (kB)",
-    "OutgoingMessageLimit (kB)",
-    "LastLogin (UTC)",
-    "PublishInGAL",
-    "CleanOutItems",
-    "DomainRestriction",
-]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate mailbox, alias, and nonexistent identity manifests.")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--domain", default="kerio.lo")
+    parser.add_argument("--control-mailbox", default=DEFAULT_CONTROL_MAILBOX)
     parser.add_argument("--new-mailboxes", type=int, default=10)
     parser.add_argument("--sender-count", type=int, default=9)
     parser.add_argument("--alias-min", type=int, default=0)
@@ -97,6 +79,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--password-length", type=int, default=DEFAULT_PASSWORD_LENGTH)
     parser.add_argument("--default-password", default=None)
+    parser.add_argument("--skip-kerio-provision", action="store_true")
+    parser.add_argument("--keep-existing-run-users", action="store_true")
+    parser.add_argument("--kerio-api-url", default=DEFAULT_KERIO_API_URL)
+    parser.add_argument("--kerio-api-user-env", default="KERIO_API_USER")
+    parser.add_argument("--kerio-api-password-env", default="KERIO_API_PASSWORD")
+    parser.add_argument("--kerio-env-file", type=Path, default=ROOT / ".env")
+    parser.add_argument("--kerio-verify-tls", action="store_true")
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -116,6 +105,22 @@ def build_name_source(seed: int | None):
         return rng.choice(FALLBACK_FIRST_NAMES), rng.choice(FALLBACK_LAST_NAMES)
 
     return rng, next_name
+
+
+def effective_seed(run_id: str, seed: int | None) -> int:
+    if seed is not None:
+        return seed
+    return int(hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:16], 16)
+
+
+def build_managed_prefix(run_id: str) -> str:
+    slug = slugify_ascii(run_id).replace(".", "")[:8] or "run"
+    token = hashlib.sha1(run_id.encode("utf-8")).hexdigest()[:6]
+    return f"kt.{slug}.{token}"
+
+
+def build_managed_description(run_id: str) -> str:
+    return f"kerio-logstash managed run {run_id}"
 
 
 def unique_local_part(base: str, used: set[str]) -> str:
@@ -177,8 +182,8 @@ def generate_password(
 
 
 def generate_users(args: argparse.Namespace) -> list[dict[str, Any]]:
-    rng, next_name = build_name_source(args.seed)
-    used_local_parts: set[str] = {"doge"}
+    rng, next_name = build_name_source(args.effective_seed)
+    used_local_parts: set[str] = {args.control_mailbox}
     used_passwords: set[str] = set()
     users: list[dict[str, Any]] = []
 
@@ -186,10 +191,11 @@ def generate_users(args: argparse.Namespace) -> list[dict[str, Any]]:
         first_name, last_name = next_name()
         display_name = f"{first_name} {last_name}"
         base_local_part = slugify_ascii(display_name)
-        local_part = unique_local_part(base_local_part, used_local_parts)
+        local_part = unique_local_part(f"{args.managed_prefix}.{base_local_part}", used_local_parts)
         users.append(
             {
                 "login": local_part,
+                "base_login": base_local_part,
                 "address": f"{local_part}@{args.domain}",
                 "display_name": display_name,
                 "password": args.default_password
@@ -200,7 +206,10 @@ def generate_users(args: argparse.Namespace) -> list[dict[str, Any]]:
                     forbidden_password_fragments(local_part, args.domain, display_name),
                 ),
                 "aliases": [],
+                "alias_local_parts": [],
                 "can_send": False,
+                "managed_prefix": args.managed_prefix,
+                "description": args.managed_description,
             }
         )
 
@@ -212,17 +221,16 @@ def generate_users(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def alias_candidates(user: dict[str, Any]) -> list[str]:
-    local_part = user["login"]
-    pieces = local_part.split(".")
+    pieces = [piece for piece in user["base_login"].split(".") if piece]
     first = pieces[0]
     last = pieces[-1]
     return [
-        f"{first[0]}.{last}",
-        f"{first}.{last[0]}",
-        f"{first[0]}{last}",
-        f"{first}-{last}",
-        f"{first}.{last}.team",
-        f"{first}.{last}.mail",
+        f"{user['managed_prefix']}.alias.{first[0]}.{last}",
+        f"{user['managed_prefix']}.alias.{first}.{last[0]}",
+        f"{user['managed_prefix']}.alias.{first[0]}{last}",
+        f"{user['managed_prefix']}.alias.{first}-{last}",
+        f"{user['managed_prefix']}.alias.{first}.{last}.team",
+        f"{user['managed_prefix']}.alias.{first}.{last}.mail",
     ]
 
 
@@ -245,6 +253,7 @@ def generate_aliases(
 
         for user in users:
             user["aliases"] = []
+            user["alias_local_parts"] = []
             alias_count = rng.randint(alias_min, alias_max)
             candidates = alias_candidates(user)
             rng.shuffle(candidates)
@@ -258,10 +267,19 @@ def generate_aliases(
                 alias_address = f"{candidate}@{domain}"
                 if alias_address in used_addresses:
                     continue
+
                 used_local_parts.add(candidate)
                 used_addresses.add(alias_address)
                 user["aliases"].append(alias_address)
-                aliases.append({"alias": alias_address, "target": user["address"]})
+                user["alias_local_parts"].append(candidate)
+                aliases.append(
+                    {
+                        "alias": alias_address,
+                        "alias_local_part": candidate,
+                        "target": user["address"],
+                        "target_login": user["login"],
+                    }
+                )
 
         if len(aliases) >= alias_total_min:
             return aliases
@@ -289,84 +307,160 @@ def generate_nonexistent_pool(domain: str, count: int, reserved: set[str], seed:
     return pool
 
 
-def write_mailboxes_csv(path: Path, users: list[dict[str, Any]]) -> None:
-    ensure_dir(path.parent)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=["login", "address", "display_name", "password", "can_send"],
+def kerio_user_create_payload(user: dict[str, Any], domain_id: str) -> dict[str, Any]:
+    return {
+        "domainId": domain_id,
+        "loginName": user["login"],
+        "fullName": user["display_name"],
+        "description": user["description"],
+        "isEnabled": True,
+        "itemSource": "DSInternalSource",
+        "authType": "UInternalAuth",
+        "password": user["password"],
+        "role": {
+            "userRole": "UserRole",
+            "publicFolderRight": False,
+            "archiveFolderRight": False,
+        },
+        "emailAddresses": [],
+        "hasDomainRestriction": False,
+        "publishInGal": False,
+        "allowPasswordChange": False,
+        "hasDefaultSpamRule": False,
+    }
+
+
+def wait_for_absent_logins(
+    client: KerioAdminClient,
+    *,
+    domain_id: str,
+    expected_absent: list[str],
+    timeout_seconds: int = 30,
+) -> None:
+    if not expected_absent:
+        return
+
+    deadline = time.monotonic() + timeout_seconds
+    remaining = set(expected_absent)
+    while remaining and time.monotonic() < deadline:
+        current = client.users_by_login(domain_id, ["id", "loginName"])
+        remaining = {login for login in remaining if login in current}
+        if remaining:
+            time.sleep(1)
+
+    if remaining:
+        raise SystemExit(
+            "Kerio did not finish removing managed users in time: "
+            + ", ".join(sorted(remaining))
         )
-        writer.writeheader()
-        writer.writerows(
-            {
-                "login": user["login"],
-                "address": user["address"],
-                "display_name": user["display_name"],
-                "password": user["password"],
-                "can_send": "yes" if user["can_send"] else "no",
-            }
-            for user in users
+
+
+def provision_kerio_entities(
+    args: argparse.Namespace,
+    users: list[dict[str, Any]],
+) -> dict[str, Any]:
+    api_user = env_or_dotenv(args.kerio_api_user_env, args.kerio_env_file)
+    api_password = env_or_dotenv(args.kerio_api_password_env, args.kerio_env_file)
+    if not api_user or not api_password:
+        raise SystemExit(
+            f"Kerio API credentials are required via {args.kerio_api_user_env}/{args.kerio_api_password_env} "
+            f"or {args.kerio_env_file}"
         )
 
+    alias_local_parts_by_login = {user["login"]: sorted(user["alias_local_parts"]) for user in users}
 
-def write_ui_aliases_csv(path: Path, aliases: list[dict[str, str]]) -> None:
-    ensure_dir(path.parent)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["alias", "deliver_to", "description"])
-        writer.writeheader()
-        writer.writerows(
-            {
-                "alias": item["alias"].split("@", 1)[0],
-                "deliver_to": item["target"],
-                "description": "",
-            }
-            for item in aliases
-        )
+    with KerioAdminClient(
+        api_url=args.kerio_api_url,
+        username=api_user,
+        password=api_password,
+        verify_tls=args.kerio_verify_tls,
+    ) as client:
+        domain = client.get_domain(args.domain)
+        before = client.users_by_login(domain["id"], ["id", "loginName", "description"])
 
+        removed_users: list[str] = []
+        if not args.keep_existing_run_users:
+            removed_users = [
+                item["loginName"]
+                for item in before.values()
+                if item.get("description") == args.managed_description
+            ]
+            client.remove_users(
+                [
+                    item["id"]
+                    for item in before.values()
+                    if item.get("description") == args.managed_description
+                ]
+            )
+            wait_for_absent_logins(client, domain_id=domain["id"], expected_absent=removed_users)
+            before = client.users_by_login(domain["id"], ["id", "loginName", "description"])
 
-def kerio_mail_addresses(user: dict[str, Any]) -> str:
-    return user["login"]
-
-
-def write_kerio_import_csv(path: Path, users: list[dict[str, Any]]) -> None:
-    ensure_dir(path.parent)
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=KERIO_USER_FIELDNAMES,
-            delimiter=";",
-        )
-        writer.writeheader()
+        reusable: dict[str, str] = {}
+        collisions: list[str] = []
         for user in users:
-            writer.writerow(
+            existing = before.get(user["login"])
+            if not existing:
+                continue
+            if existing.get("description") == args.managed_description:
+                reusable[user["login"]] = existing["id"]
+            else:
+                collisions.append(user["login"])
+
+        if collisions:
+            raise SystemExit(
+                "Kerio login collision with existing non-managed users: "
+                + ", ".join(sorted(collisions))
+            )
+
+        create_payloads = [
+            kerio_user_create_payload(user, domain["id"])
+            for user in users
+            if user["login"] not in reusable
+        ]
+        created_rows = client.create_users(create_payloads) if create_payloads else []
+
+        users_after_create = client.users_by_login(domain["id"], ["id", "loginName", "description"])
+        provisioned_users: list[dict[str, Any]] = []
+        for user in users:
+            current = users_after_create.get(user["login"])
+            if not current:
+                raise SystemExit(f"Kerio user {user['login']} was not found after provisioning")
+            client.set_user_email_addresses(
+                domain_id=domain["id"],
+                user_id=current["id"],
+                email_local_parts=alias_local_parts_by_login[user["login"]],
+            )
+            provisioned_users.append(
                 {
-                    "Name": user["login"],
-                    "Password": user["password"],
-                    "FullName": user["display_name"],
-                    "Description": "",
-                    "Enable": "Yes",
-                    "DataSource": "Internal",
-                    "Authentication": "Internal",
-                    "Role": "No rights",
-                    "Groups": "",
-                    "MailAddress": kerio_mail_addresses(user),
-                    "EmailForwarding": "",
-                    "ItemLimit": "",
-                    "DiskSizeLimit (kB)": "",
-                    "ConsumedItems": "0",
-                    "ConsumedSize (kB)": "0",
-                    "OutgoingMessageLimit (kB)": "",
-                    "LastLogin (UTC)": "",
-                    "PublishInGAL": "Yes",
-                    "CleanOutItems": "Domain defined",
-                    "DomainRestriction": "No",
+                    "login": user["login"],
+                    "address": user["address"],
+                    "user_id": current["id"],
+                    "alias_local_parts": alias_local_parts_by_login[user["login"]],
+                    "aliases": user["aliases"],
+                    "action": "reused" if user["login"] in reusable else "created",
                 }
             )
+
+    return {
+        "enabled": True,
+        "mode": "kerio_api_users_email_addresses",
+        "domain": args.domain,
+        "managed_prefix": args.managed_prefix,
+        "managed_description": args.managed_description,
+        "removed_same_run_users": sorted(removed_users),
+        "created_count": len([item for item in provisioned_users if item["action"] == "created"]),
+        "reused_count": len([item for item in provisioned_users if item["action"] == "reused"]),
+        "created_result_rows": created_rows,
+        "users": provisioned_users,
+    }
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    args.effective_seed = effective_seed(args.run_id, args.seed)
+    args.managed_prefix = build_managed_prefix(args.run_id)
+    args.managed_description = build_managed_description(args.run_id)
 
     output_dir = ensure_dir(args.output_dir)
     users = generate_users(args)
@@ -376,46 +470,59 @@ def main() -> int:
         alias_min=args.alias_min,
         alias_max=args.alias_max,
         alias_total_min=args.alias_total_min,
-        seed=args.seed,
+        seed=args.effective_seed,
     )
 
-    reserved = {"doge@" + args.domain}
+    reserved = {f"{args.control_mailbox}@{args.domain}"}
     reserved.update(user["address"] for user in users)
     reserved.update(alias["alias"] for alias in aliases)
     nonexistent_pool = generate_nonexistent_pool(
         domain=args.domain,
         count=args.nonexistent_count,
         reserved=reserved,
-        seed=args.seed,
+        seed=args.effective_seed,
     )
 
-    sender_pool = ["doge@" + args.domain] + [user["address"] for user in users if user["can_send"]]
-    real_recipient_pool = ["doge@" + args.domain] + [user["address"] for user in users]
+    provisioning = {
+        "enabled": False,
+        "mode": "skipped",
+        "reason": "skip-kerio-provision",
+    }
+    if not args.skip_kerio_provision:
+        provisioning = provision_kerio_entities(args, users)
+
+    sender_pool = [f"{args.control_mailbox}@{args.domain}"] + [user["address"] for user in users if user["can_send"]]
+    real_recipient_pool = [f"{args.control_mailbox}@{args.domain}"] + [user["address"] for user in users]
 
     payload = {
         "generated_at": utc_now_iso(),
         "run_id": args.run_id,
+        "seed": args.effective_seed,
         "domain": args.domain,
-        "control_mailbox": "doge@" + args.domain,
+        "control_mailbox": f"{args.control_mailbox}@{args.domain}",
+        "managed_prefix": args.managed_prefix,
+        "managed_description": args.managed_description,
         "sender_pool": sender_pool,
         "real_recipient_pool": real_recipient_pool,
         "alias_pool": aliases,
         "nonexistent_pool": nonexistent_pool,
         "users": users,
+        "kerio_provisioning": provisioning,
     }
 
     write_json(output_dir / "identities.json", payload)
-    write_mailboxes_csv(output_dir / "provision_mailboxes.csv", users)
-    write_ui_aliases_csv(output_dir / "ui_aliases.csv", aliases)
-    write_kerio_import_csv(output_dir / "kerio_import_users.csv", users)
+    write_json(output_dir / "kerio_provisioning.json", provisioning)
 
     print(f"Generated identities for run {args.run_id}")
+    print(f"Effective seed: {args.effective_seed}")
+    print(f"Managed prefix: {args.managed_prefix}")
     print(f"Real mailboxes: {len(real_recipient_pool)}")
     print(f"Senders: {len(sender_pool)}")
     print(f"Aliases: {len(aliases)}")
     print(f"Nonexistent addresses: {len(nonexistent_pool)}")
-    print(f"Kerio import CSV: {output_dir / 'kerio_import_users.csv'}")
-    print(f"Kerio UI aliases CSV: {output_dir / 'ui_aliases.csv'}")
+    print(f"Kerio provisioning: {provisioning['mode']}")
+    print(f"Identity manifest: {output_dir / 'identities.json'}")
+    print(f"Provisioning manifest: {output_dir / 'kerio_provisioning.json'}")
     return 0
 
 

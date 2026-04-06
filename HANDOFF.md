@@ -6,10 +6,10 @@ This file captures the current working state of `kerio-logstash-project` so work
 
 ## Current Snapshot
 
-- Updated: 2026-04-05 10:35 UTC
+- Updated: 2026-04-06 12:50 UTC
 - Repository: `/root/kerio-logstash-project`
 - Branch: `main`
-- Latest tagged release: `v0.1.4`
+- Latest tagged release: `v0.1.5`
 - Runtime ELK host: redacted from repository; use your local inventory or SSH alias
 - Runtime Kerio host: redacted from repository; use your local inventory or SSH alias
 - Syslog input: live Kerio RFC5424 syslog on `5514/udp` and `5514/tcp`
@@ -31,36 +31,36 @@ Remote Kerio stack:
 
 ## Latest Validation
 
-Final end-to-end validation was completed on 2026-04-04.
+Final end-to-end validation was completed on 2026-04-06.
 
 Test message:
 
-- Subject: `KERIO-FINAL-20260404-100321`
-- Queue-ID: `69d0e1e9-00000003`
-- From: `<external-test-sender@example.net>`
-- To: `<control-mailbox@lab-domain>`
+- Run ID: `LIVE-PLUS10-20260406-124549`
+- Batch size: `20`
+- Managed mailboxes created for the run: `10`
+- Managed aliases created for the run: `10`
 
 Observed path:
 
-1. Kerio `mail.log` on the Kerio host recorded both `Recv` and `Sent`.
-2. `kerio-logstash` on the ELK host emitted an aggregated `message_flow_aggregated` event.
-3. Elasticsearch on the ELK host stored the parsed result in `kerio-flow-2026.04.04`.
+1. Kerio admin JSON-RPC created managed test users and assigned additional email addresses through `Users.set`.
+2. Kerio `mail.log` on the Kerio host recorded `Recv`, `Sent`, and expected unknown-recipient failures for the batch.
+3. `kerio-logstash` on the ELK host emitted aggregated `message_flow_aggregated` events after the aggregate timeout window.
+4. Elasticsearch on the ELK host stored raw negative events in `kerio-connect-2026.04.06` and aggregated message flow in `kerio-flow-2026.04.06`.
 
 Validated fields:
 
 - `event.action=message_flow_aggregated`
 - `event.outcome=success`
-- `email.local_id=69d0e1e9-00000003`
-- `email.subject=KERIO-FINAL-20260404-100321`
-- `email.from.address=<external-test-sender@example.net>`
-- `email.to.address=[<control-mailbox@lab-domain>]`
-- `kerio.recv_count=1`
-- `kerio.sent_count=1`
+- `email.subject=KT-LIVE-PLUS10-20260406-124549-*`
+- `email.from.address=<managed-or-control-mailbox@kerio.lo>`
+- `email.to.address=[<managed-or-alias-mailbox@kerio.lo>]`
+- `kerio.result=not_delivered` for standalone nonexistent-recipient probes
+- Verification summary: `planned_messages=20`, `sent_messages=18`, `passed=20`, `failed=0`, `unparsed_hits=0`
 
 ## Release State
 
-- Latest release in this repository: `v0.1.2`
-- Release content includes the live syslog-only workflow, the Kerio mail parser fix, the mail-test toolkit scaffold, the family-standard README, and governance files
+- Latest release in this repository: `v0.1.5`
+- Release content includes the live syslog workflow, managed Kerio API provisioning for run identities, safer rerun cleanup, JSON-only run artifacts, the tuned mail-test toolkit defaults, and the family-standard project documentation
 
 ## What Changed In This Session
 
@@ -74,13 +74,12 @@ Validated fields:
 - Removed concrete lab IP addresses from repository-tracked files.
 - Added a mail-test toolkit scaffold under `scripts/` for identity generation, batch SMTP sending, and run verification.
 - Smoke-tested the new toolkit with a generated `MAILLOG-SMOKE` manifest and a `--dry-run` batch send.
-- `generate_identities.py` now writes `kerio_import_users.csv` using the same field set as the real Kerio users export sample.
 - `generate_identities.py` now generates a unique random 12-character password per mailbox by default, with mixed case, digits, and special characters.
-- The Kerio users import now matches the sample export defaults for plain user accounts.
-- Removed the duplicate `users_<domain>_<date>.csv` helper output from generated run artifacts.
-- `kerio_import_users.csv` now also carries a `Password` column filled from the generated complex mailbox passwords.
 - Generated passwords now avoid fragments from the login, domain, and display name and use a narrower Kerio-safe symbol set.
-- Aliases are now emitted as `ui_aliases.csv` for manual Kerio web UI entry, while the full alias pool remains in `identities.json`.
+- `generate_identities.py` now also supports automatic Kerio provisioning through the admin JSON-RPC API, so managed test users and their additional email addresses can be created without manual CSV import or UI alias entry.
+- Managed run identities now use a deterministic run-based prefix plus a stable seed derived from `run_id`, which avoids collisions with pre-existing lab accounts and makes repeated runs reproducible.
+- Managed Kerio cleanup now waits for asynchronous user deletion to finish before continuing, which prevents same-`run_id` delete/recreate races on live reruns.
+- Generated run artifacts no longer include legacy CSV exports because the active toolkit consumes only `identities.json` and `kerio_provisioning.json`.
 - `verify_run.py` now uses recipient-plus-time-window fallback correlation for negative cases such as unknown recipients and can infer raw failure classes from message text when `event.action` is missing.
 - The real Kerio batch run `MAILLOG-KERIO-DEFAULT-20260404-1539` now verifies cleanly with `passed=100`, `failed=0`, and `unparsed_hits=0`.
 - Raw negative-delivery Kerio events now parse correctly even when they arrive as `process.name=kerio`; Elasticsearch documents now include `email.from.address`, `email.to.address`, `event.action=delivery_unknown_recipient`, `event.outcome=failure`, and `kerio.result=not_delivered`.

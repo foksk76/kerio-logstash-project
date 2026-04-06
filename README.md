@@ -61,7 +61,7 @@ If you need:
 3. Raw normalized events are stored in `kerio-connect-*`.
 4. Mail events with a `Queue-ID` are aggregated into message-flow documents and stored in `kerio-flow-*`.
 5. Elasticsearch makes both raw and aggregated views available to Kibana or Grafana.
-6. Optional helper scripts in `scripts/` can generate test identities, send synthetic mail batches, and verify the indexed results.
+6. Optional helper scripts in `scripts/` can generate managed test identities, provision them through the Kerio admin API, send synthetic mail batches, and verify the indexed results.
 
 ## Requirements
 
@@ -165,6 +165,15 @@ What is mandatory:
 
 - `.env` must exist before `docker compose up -d`;
 - the same password must be used for all `curl -u elastic:$ELASTIC_PASSWORD ...` commands below.
+
+Optional helper-script settings for live Kerio runs:
+
+```bash
+KERIO_API_USER=admin@example.test
+KERIO_API_PASSWORD=ChangeMe-2026!
+```
+
+These are used by `scripts/generate_identities.py` when you want the run toolkit to create and reset managed test mailboxes automatically through the Kerio admin API.
 
 What to review before first start:
 
@@ -443,7 +452,7 @@ Expected result:
 - The Logstash pipeline intentionally uses `pipeline.workers: 1` because mail-flow aggregation relies on the `aggregate` filter.
 - Kibana is currently published on host port `80`, so the default local URL is `http://localhost/`.
 - `artifacts/runs/` may contain generated passwords, test recipients, and verification output. Keep those files local and out of git.
-- `.env` is intentionally ignored because it contains runtime secrets such as `ELASTIC_PASSWORD`.
+- `.env` is intentionally ignored because it contains runtime secrets such as `ELASTIC_PASSWORD`, `KERIO_API_USER`, and `KERIO_API_PASSWORD`.
 
 ## Roadmap
 

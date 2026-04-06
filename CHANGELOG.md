@@ -6,6 +6,23 @@ The format is based on Keep a Changelog and this project currently follows a sim
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-04-06
+
+### Added
+
+- `scripts/kerio_api.py` as a lightweight Kerio Connect admin JSON-RPC client for managed provisioning from the local run toolkit.
+
+### Changed
+
+- `scripts/generate_identities.py` now defaults to deterministic run-scoped identity generation by deriving a stable seed and managed login prefix from `run_id`.
+- `scripts/generate_identities.py` now provisions managed Kerio users automatically through the admin API and assigns alias addresses via `Users.set` / `emailAddresses` instead of relying only on manual CSV import and UI alias entry.
+- Generated managed users are now hidden from GAL by default and carry a run-specific description marker so same-run cleanup is targeted and safe.
+- `scripts/generate_identities.py` no longer writes legacy CSV helper exports into run directories because the active run flow consumes only JSON manifests.
+
+### Fixed
+
+- Repeat provisioning for the same `run_id` now waits for Kerio's asynchronous user deletion to complete before attempting recreate, which avoids delete/recreate races on live reruns.
+
 ## [0.1.4] - 2026-04-05
 
 ### Fixed

@@ -9,12 +9,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCENARIO_WEIGHTS = {
-    "peer_to_peer": 0.25,
-    "mailing": 0.25,
-    "nonexistent": 0.25,
-    "aliases_only": 0.12,
-    "real_plus_aliases": 0.13,
+DEFAULT_SCENARIO_PROFILE = "lab_default"
+SCENARIO_WEIGHT_PROFILES = {
+    DEFAULT_SCENARIO_PROFILE: {
+        "peer_to_peer": 0.50,
+        "mailing": 0.10,
+        "nonexistent": 0.08,
+        "aliases_only": 0.12,
+        "real_plus_aliases": 0.20,
+    },
+    "legacy": {
+        "peer_to_peer": 0.25,
+        "mailing": 0.25,
+        "nonexistent": 0.25,
+        "aliases_only": 0.12,
+        "real_plus_aliases": 0.13,
+    },
 }
 
 
@@ -67,12 +77,23 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def allocate_scenarios(message_count: int) -> dict[str, int]:
+def scenario_weights_for_profile(profile: str) -> dict[str, float]:
+    if profile not in SCENARIO_WEIGHT_PROFILES:
+        raise ValueError(f"Unsupported scenario profile: {profile}")
+
+    weights = dict(SCENARIO_WEIGHT_PROFILES[profile])
+    total_weight = sum(weights.values())
+    if not math.isclose(total_weight, 1.0, abs_tol=1e-9):
+        raise ValueError(f"Scenario profile {profile} must sum to 1.0, got {total_weight}")
+    return weights
+
+
+def allocate_scenarios(message_count: int, weights: dict[str, float]) -> dict[str, int]:
     raw_allocations: list[tuple[float, str]] = []
     scenario_counts: dict[str, int] = {}
 
     total_assigned = 0
-    for scenario, weight in SCENARIO_WEIGHTS.items():
+    for scenario, weight in weights.items():
         raw_value = message_count * weight
         base_value = math.floor(raw_value)
         scenario_counts[scenario] = base_value
@@ -86,4 +107,3 @@ def allocate_scenarios(message_count: int) -> dict[str, int]:
         total_assigned += 1
 
     return scenario_counts
-
