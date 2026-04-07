@@ -1,67 +1,69 @@
+Language: [English](README.md) | [Русский](README.ru.md)
+
 # Kerio Connect Logstash Project
 
-Parsing, normalization, enrichment, and mail-flow correlation for Kerio Connect syslog into Elasticsearch.
+A reproducible Logstash and Elasticsearch lab: it receives Kerio Connect syslog, maps it into understandable fields, and helps trace a message from receipt to delivery.
 
 [![CI](https://github.com/foksk76/kerio-logstash-project/actions/workflows/ci.yml/badge.svg)](https://github.com/foksk76/kerio-logstash-project/actions/workflows/ci.yml)
 
+> **Project status:** A lab-friendly project for safely checking Kerio Connect log parsing before live use.
+
+> **Language policy:** `README.md` is the main English README. `README.ru.md` is a helper Russian translation for lab work and onboarding.
+
 ## Why this repository exists
 
-Kerio Connect can emit useful operational, security, and mail-flow events over syslog, but those logs are not ready for dashboards or repeatable analysis as-is.
+Kerio Connect can send useful operational, security, and mail-delivery events over syslog. In their raw form, though, those logs are not very pleasant to search, graph, or test repeatedly.
 
-This repository exists to:
+This repository has two jobs:
 
-- receive live Kerio Connect RFC5424 syslog;
-- parse Kerio-specific log formats into ECS-like fields;
-- enrich and normalize events for Elasticsearch queries and Kibana exploration;
-- aggregate related mail events by `Queue-ID` so message flow is easier to inspect;
-- provide a reproducible local ELK stack for parser development and validation.
-
-The expected outcome is simple: start the stack, send Kerio syslog to `5514`, and get searchable raw events in `kerio-connect-*` plus aggregated mail-flow events in `kerio-flow-*`.
+- receive live Kerio Connect syslog, parse Kerio log lines, and store them in Elasticsearch as structured events;
+- provide a local lab where the parser, mail flows, and audit events can be checked before a live server is connected.
 
 ## Project family
 
 This repository is part of the **Kerio Connect Monitoring & Logging** project family:
 
 1. [kerio-connect](https://github.com/foksk76/kerio-connect) — reproducible Kerio Connect lab environment
-2. [kerio-logstash-project](https://github.com/foksk76/kerio-logstash-project) — parsing, normalization, and enrichment pipeline for Kerio syslog
+2. [kerio-logstash-project](https://github.com/foksk76/kerio-logstash-project) — parser and storage pipeline for Kerio syslog
 3. [kerio-syslog-anonymizer](https://github.com/foksk76/kerio-syslog-anonymizer) — deterministic anonymization of real log data for safe public use
 
 ## Where this repository fits
 
-This repository is the parsing and storage layer in the family flow:
+In the overall chain, this repository sits between Kerio Connect and the viewing layer:
 
 `Kerio Connect -> Syslog (RFC5424) -> Logstash -> Elasticsearch -> Kibana / Grafana`
 
-If you need:
+The repositories complement each other:
 
-- a reproducible Kerio Connect lab source, use `kerio-connect`;
-- safe public sample logs, use `kerio-syslog-anonymizer`;
-- live parsing, normalization, and validation of Kerio syslog, use this repository.
+- `kerio-connect` provides a reproducible Kerio Connect lab;
+- `kerio-syslog-anonymizer` prepares real logs for safe public sharing;
+- this repository covers the Logstash / Elasticsearch part for Kerio syslog.
 
-## Main use cases
+## Main Usage Flow
 
-- Receive live Kerio Connect syslog over `5514/udp` or `5514/tcp`.
-- Normalize audit, security, warn, operations, and mail logs into ECS-like fields.
-- Aggregate `Recv` / `Sent` mail events into message-flow documents by `Queue-ID`.
-- Validate parser changes locally with synthetic RFC5424 test events.
-- Run batch mail-log tests with the included helper scripts.
+The usual path is:
 
-## Audience
+1. Kerio Connect sends syslog to `5514/udp` or `5514/tcp`.
+2. Logstash parses Kerio `audit`, `security`, `warn`, `operations`, and `mail` logs into ECS-like fields.
+3. `Recv` and `Sent` mail events with the same `Queue-ID` are grouped into one message-flow document.
+4. Elasticsearch stores original events and aggregated mail flows for search and inspection.
+5. The scripts in this repository run repeatable mail, audit, and indexing checks.
 
-- beginner DevOps engineers who need a reproducible ELK-based parser stack;
-- sysadmins operating Kerio Connect and wanting structured log search;
-- homelab users testing Kerio logging end to end;
-- observability and SecOps practitioners building queries or dashboards on top of Kerio events;
-- contributors extending the Logstash parser.
+## Who This Is For
 
-## Architecture / Flow
+- Kerio Connect administrators who need to understand what happened with mail, logins, and delivery failures.
+- DevOps, observability, and SecOps engineers who want a small ELK stand for searching, validating, and troubleshooting Kerio logs.
+- Project contributors who want to change the parser and immediately see what changed in the indexes and test runs.
 
-1. Kerio Connect sends RFC5424 syslog to Logstash on port `5514`.
-2. Logstash parses the syslog envelope and then applies Kerio-specific parsing rules from `logstash/pipeline/kerio-connect-main.conf`.
-3. Raw normalized events are stored in `kerio-connect-*`.
-4. Mail events with a `Queue-ID` are aggregated into message-flow documents and stored in `kerio-flow-*`.
-5. Elasticsearch makes both raw and aggregated views available to Kibana or Grafana.
-6. Optional helper scripts in `scripts/` can generate managed test identities, provision them through the Kerio admin API, send synthetic mail batches, and verify the indexed results.
+## Architecture / Component Roles
+
+The same components, by role:
+
+1. **Kerio Connect** sends RFC5424 syslog to port `5514`.
+2. **Logstash** reads the syslog wrapper and applies Kerio rules from `logstash/pipeline/kerio-connect-main.conf`.
+3. **Elasticsearch** stores two kinds of data: original events in `kerio-connect-*` and mail flows in `kerio-flow-*`.
+4. **Kibana / Grafana** provide search, inspection, and future dashboard views.
+5. **Scripts in `scripts/`** create test users, send mail, and verify that events reached the indexes.
 
 ## Requirements
 
@@ -72,12 +74,12 @@ If you need:
 - Docker Compose plugin
 - `curl`
 - `python3` for the local verification example and helper scripts
-- A Kerio Connect host if you want live vendor logs instead of synthetic test input
+- A Kerio Connect host if you want to test with real Kerio logs instead of synthetic events
 
 ### Hardware
 
 - 2 vCPU minimum
-- 6 GB RAM available to Docker is the practical baseline for the shipped defaults
+- 6 GB RAM available to Docker is a practical minimum for the default settings
 - 10 GB free disk space for images, Elasticsearch data, and logs
 
 ### Tested versions
@@ -94,46 +96,36 @@ If you need:
 
 ## Repository structure
 
-```text
-.
-├── README.md
-├── CHANGELOG.md
-├── HANDOFF.md
-├── NEXT_STEPS.md
-├── docker-compose.yml
-├── docker/
-│   └── kibana/
-│       ├── generate-service-token.sh
-│       └── start-with-service-token.sh
-├── elasticsearch/
-│   └── templates/
-│       ├── kerio-connect-ecs-template.json
-│       └── kerio-flow-template.json
-├── logstash/
-│   ├── config/
-│   │   ├── logstash.yml
-│   │   └── pipelines.yml
-│   └── pipeline/
-│       └── kerio-connect-main.conf
-├── scripts/
-│   ├── generate_identities.py
-│   ├── mailtest_common.py
-│   ├── run_audit_matrix.py
-│   ├── send_mail_batch.py
-│   └── verify_run.py
-└── artifacts/
-    ├── .gitignore
-    └── runs/
-```
+If you need to find something quickly:
+
+- `docker-compose.yml` starts the local Elasticsearch, Logstash, and Kibana stack.
+- `logstash/pipeline/kerio-connect-main.conf` is the main Kerio parsing pipeline.
+- `logstash/config/` contains Logstash settings and the pipeline list.
+- `elasticsearch/templates/` contains index templates for `kerio-connect-*` and `kerio-flow-*`.
+- `docker/kibana/` contains helper scripts for starting Kibana with a service token.
+- `scripts/` contains run tools: test-user generation, mail sending, audit matrix, and verification.
+- `artifacts/runs/` is for local run artifacts; its contents should stay out of git.
+- `README.md`, `README.ru.md`, `CHANGELOG.md`, `HANDOFF.md`, and `NEXT_STEPS.md` describe the current project state and next steps.
+
+## Documentation language policy
+
+- `README.md` is the main English source.
+- `README.ru.md` is the Russian translation for lab work and quick onboarding.
+- The first line of both README files is the language switcher.
+- The Russian README follows the English README and does not document separate behavior.
+- `CHANGELOG.md` is maintained in English.
+- `CONTRIBUTING.md` is maintained in English; Russian README changes are welcome when they keep the meaning of the English version.
 
 ## Quick Start
 
-This Quick Start verifies four things:
+Short path: start the local stack, send one test event, and see it in Elasticsearch.
 
-- the ELK stack starts;
-- the Logstash pipeline is loaded;
-- the syslog input accepts traffic;
-- a parsed Kerio event becomes visible in Elasticsearch.
+By the end, you will:
+
+- start the ELK stack;
+- confirm that the Logstash pipeline is loaded;
+- send one syslog event to Logstash;
+- see the parsed Kerio event in Elasticsearch.
 
 ### 1. Clone the repository
 
@@ -142,14 +134,14 @@ git clone https://github.com/foksk76/kerio-logstash-project.git
 cd kerio-logstash-project
 ```
 
-Expected result:
+If all is well:
 
 - the current directory is the repository root;
 - files such as `docker-compose.yml` and `README.md` are present.
 
 ### 2. Prepare the environment
 
-Create `.env` with the Elasticsearch password that the stack will use:
+Create `.env` with the Elasticsearch password for this stack:
 
 ```bash
 cat > .env <<'EOF'
@@ -157,29 +149,29 @@ ELASTIC_PASSWORD=ChangeMe-2026!
 EOF
 ```
 
-What you must edit:
+What you can edit:
 
 - replace `ChangeMe-2026!` if you do not want to keep the example password;
 - keep the variable name exactly `ELASTIC_PASSWORD`.
 
-What is mandatory:
+What matters:
 
 - `.env` must exist before `docker compose up -d`;
 - the same password must be used for all `curl -u elastic:$ELASTIC_PASSWORD ...` commands below.
 
-Optional helper-script settings for live Kerio runs:
+Optional settings for live Kerio test runs:
 
 ```bash
 KERIO_API_USER=admin@example.test
 KERIO_API_PASSWORD=ChangeMe-2026!
 ```
 
-These are used by `scripts/generate_identities.py` when you want the run toolkit to create and reset managed test mailboxes automatically through the Kerio admin API.
+`scripts/generate_identities.py` uses these values when you want the test tools to create and reset managed Kerio mailboxes through the admin API.
 
-What to review before first start:
+Before the first start, check the memory settings:
 
 - `docker-compose.yml` currently sets `ES_JAVA_OPTS=-Xms2g -Xmx2g` and `LS_JAVA_OPTS=-Xms1g -Xmx1g`;
-- if your Docker host cannot spare that memory, lower those values in `docker-compose.yml` before starting the stack.
+- if your Docker host cannot spare that memory, lower those values in `docker-compose.yml` before you start the stack.
 
 ### 3. Run the project
 
@@ -201,16 +193,16 @@ curl -s -u elastic:$ELASTIC_PASSWORD -H "Content-Type: application/json" \
   --data-binary @elasticsearch/templates/kerio-flow-template.json
 ```
 
-What success looks like:
+If all is well:
 
 - `docker compose up -d` creates and starts `kerio-elasticsearch`, `kerio-logstash`, and `kerio-kibana`;
 - `kibana-token-init` runs once and exits successfully;
 - each template install command returns JSON that includes `"acknowledged": true`.
 
-Notes for live use:
+If you connect a live Kerio server:
 
 - for real Kerio logs, configure Kerio Connect external syslog to send to `<elk-host>:5514`;
-- this Quick Start does not require a live Kerio host because it injects one synthetic RFC5424 event locally in step 4.
+- this quick start does not require a Kerio host because step 4 sends one local synthetic RFC5424 event.
 
 ### 4. Verify the result
 
@@ -220,7 +212,7 @@ Verify container state:
 docker compose ps
 ```
 
-Expected result:
+If all is well:
 
 - `kerio-elasticsearch` is `Up` and healthy;
 - `kerio-logstash` is `Up`;
@@ -233,7 +225,7 @@ Verify Elasticsearch responds:
 curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200 | python3 -m json.tool
 ```
 
-Expected result:
+If all is well:
 
 - the JSON contains `"cluster_name": "kerio-es"`;
 - the request succeeds without an authentication error.
@@ -244,7 +236,7 @@ Verify the Logstash pipeline is loaded:
 curl -s http://localhost:9600/_node/pipelines?pretty
 ```
 
-Expected result:
+If all is well:
 
 - the output contains `kerio-connect-main`;
 - there is no fatal error in the response.
@@ -267,21 +259,21 @@ sock.close()
 PY
 ```
 
-Expected result:
+If all is well:
 
 - the command finishes without output;
 - Logstash accepts the packet on `5514/udp`.
 
-Verify parsed output and Elasticsearch index visibility:
+Check that Elasticsearch received the parsed event:
 
 ```bash
 curl -s -u elastic:$ELASTIC_PASSWORD \
   "http://localhost:9200/kerio-connect-*/_search?pretty" \
   -H "Content-Type: application/json" \
-  -d '{"size":1,"sort":[{"@timestamp":{"order":"desc"}}],"query":{"term":{"event.action.keyword":"delivery_unknown_recipient"}},"_source":["@timestamp","event.action","event.outcome","email.from.address","email.to.address","kerio.result","network.protocol"]}'
+  -d '{"size":1,"sort":[{"@timestamp":{"order":"desc"}}],"query":{"term":{"event.action":"delivery_unknown_recipient"}},"_source":["@timestamp","event.action","event.outcome","email.from.address","email.to.address","kerio.result","network.protocol"]}'
 ```
 
-Expected result:
+If all is well:
 
 - a document is returned from `kerio-connect-*`;
 - `event.action` is `delivery_unknown_recipient`;
@@ -290,9 +282,9 @@ Expected result:
 - `email.to.address` is `ghost.user.001@example.test`;
 - `kerio.result` is `not_delivered`.
 
-### 5. Example outcome
+### 5. Confirm the outcome
 
-After the steps above, you should have:
+After these steps, you should have:
 
 - a running ELK stack;
 - a loaded Logstash pipeline;
@@ -304,7 +296,7 @@ You can confirm the index exists with:
 curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200/_cat/indices/kerio-*?v
 ```
 
-Expected result:
+If all is well:
 
 - at least one `kerio-connect-YYYY.MM.DD` index is listed;
 - the raw index has a non-zero `docs.count` after the synthetic test event;
@@ -312,8 +304,10 @@ Expected result:
 
 ## Audit Matrix Run
 
-For live Kerio audit validation, the repository also ships `scripts/run_audit_matrix.py`.
-It reads an existing `identities.json`, exercises the available Kerio authentication paths, and verifies the resulting successful authentication entries directly in `audit.log` over SSH.
+For Kerio audit runs, the repository also includes `scripts/run_audit_matrix.py`.
+It reads an existing `identities.json`, tries the available Kerio login paths, and checks the successful authentication entries in `audit.log` over SSH.
+
+Run this when you already have a live Kerio Connect host, SSH access to it, and an `identities.json` from a previous run. It is not required for first-time onboarding; the quick start above intentionally works without a live Kerio host.
 
 The current automated matrix covers:
 
@@ -323,7 +317,7 @@ The current automated matrix covers:
 - `IMAP` through `993`;
 - `POP3` through `995`.
 
-`HTTP/KOFF` is included in the run output as a manual-only case because it requires Kerio Outlook Connector / Outlook on the stand.
+`HTTP/KOFF` is listed as a manual-only case because it requires Kerio Outlook Connector / Outlook on the test stand.
 
 Example:
 
@@ -336,20 +330,20 @@ python3 scripts/run_audit_matrix.py \
 
 Expected artifacts:
 
-- `audit_results.json` with per-protocol pass / fail / skip details;
-- `audit_summary.md` with a human-readable matrix summary.
+- `audit_results.json` with pass / fail / skip details for each protocol;
+- `audit_summary.md` with a readable matrix summary.
 
-## Example input
+## Minimal Parser Event
 
-The following RFC5424 line is a valid minimal example for the current parser:
+This RFC5424 line is a minimal working example:
 
 ```text
 <21>1 2026-04-05T00:00:00Z kerio-connect kerio - - - Attempt to deliver to unknown recipient <ghost.user.001@example.test>, from <sender@example.test>, IP address 192.0.2.10
 ```
 
-## Example output
+## Normalized Result
 
-One expected normalized raw event looks like this:
+The expected Elasticsearch document looks like this:
 
 ```json
 {
@@ -401,11 +395,11 @@ One expected normalized raw event looks like this:
 - `docker compose ps` shows `kerio-elasticsearch` restarting or exited;
 - `docker compose logs elasticsearch` mentions memory pressure or exit code `137`.
 
-**Cause**
+**What to check**
 
-- the shipped heap setting is too large for the available Docker memory.
+- the default heap setting is too large for the Docker memory available on this host.
 
-**Solution**
+**How to fix it**
 
 Example fix for a smaller lab host:
 
@@ -414,47 +408,47 @@ sed -i 's/ES_JAVA_OPTS=-Xms2g -Xmx2g/ES_JAVA_OPTS=-Xms1g -Xmx1g/' docker-compose
 docker compose up -d
 ```
 
-Expected result:
+If all is well:
 
 - `kerio-elasticsearch` stays up;
 - `curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200` returns JSON instead of a connection error.
 
-### Problem: the pipeline is up but no events appear in `kerio-connect-*`
+### Problem: the pipeline is running, but no events appear in `kerio-connect-*`
 
 **Symptoms**
 
 - `curl http://localhost:9600/_node/pipelines?pretty` shows `kerio-connect-main`;
-- the `_search` example returns zero hits.
+- the `_search` example returns no results.
 
-**Cause**
+**What to check**
 
-- no input reached `5514`, or the test event was sent before Logstash finished starting.
+- nothing reached `5514`, or the test event was sent before Logstash finished starting.
 
-**Solution**
+**How to fix it**
 
 ```bash
 docker compose logs --tail 50 logstash
 curl -s http://localhost:9600/_node/pipelines?pretty | grep kerio-connect-main
 ```
 
-Then resend the synthetic packet from Quick Start step `4` and rerun the `_search` command.
+Then resend the synthetic event from quick start step `4` and run the `_search` command again.
 
-Expected result:
+If all is well:
 
 - Logstash is running and listening;
 - the next search returns a parsed document.
 
-### Problem: Kibana opens on the wrong URL or shared links point to the wrong port
+### Problem: Kibana opens, but links point to the wrong URL or port
 
 **Symptoms**
 
 - Kibana is reachable locally, but generated links or redirects use the wrong public URL.
 
-**Cause**
+**What to check**
 
-- `docker-compose.yml` currently publishes Kibana on host port `80`, while `SERVER_PUBLICBASEURL` may need to match your real external URL.
+- `docker-compose.yml` publishes Kibana on host port `80`, while `SERVER_PUBLICBASEURL` may need to match your real external URL.
 
-**Solution**
+**How to fix it**
 
 Edit `docker-compose.yml`, then restart Kibana:
 
@@ -462,23 +456,23 @@ Edit `docker-compose.yml`, then restart Kibana:
 docker compose up -d kibana
 ```
 
-Expected result:
+If all is well:
 
 - Kibana is still reachable;
 - the public base URL now matches your environment.
 
-## Limitations / Non-goals
+## What This Project Does Not Do
 
-- This repository is not a Kerio Connect deployment project; it assumes logs come from an existing Kerio source.
-- This repository is not a replacement for vendor documentation.
+- This repository does not deploy Kerio Connect. It assumes logs come from an existing Kerio source.
+- This repository does not replace Kerio or Elastic vendor documentation.
 - This repository is not a full production hardening guide for Elastic Stack or Kerio Connect.
-- This repository does not ship prebuilt dashboards or Grafana content by default.
-- This repository is not the anonymization tool for publishing real customer logs; use `kerio-syslog-anonymizer` for that.
+- This repository does not include prebuilt dashboards or Grafana content by default.
+- This repository is not the tool for anonymizing real customer logs. Use `kerio-syslog-anonymizer` for that.
 
-## Notes
+## What To Know Before Use
 
-- Kerio Connect itself is proprietary vendor software and is not distributed by this repository.
-- Elastic Stack Docker images are third-party software and remain subject to their own licensing and usage terms.
+- Kerio Connect is proprietary vendor software and is not distributed by this repository.
+- Elastic Stack Docker images are third-party software and remain subject to their own licenses and usage terms.
 - The Logstash pipeline intentionally uses `pipeline.workers: 1` because mail-flow aggregation relies on the `aggregate` filter.
 - Kibana is currently published on host port `80`, so the default local URL is `http://localhost/`.
 - `artifacts/runs/` may contain generated passwords, test recipients, and verification output. Keep those files local and out of git.
@@ -492,6 +486,8 @@ See [NEXT_STEPS.md](./NEXT_STEPS.md)
 
 See [CHANGELOG.md](./CHANGELOG.md)
 
+Keep `CHANGELOG.md` as the canonical English changelog unless the repository explicitly decides otherwise.
+
 ## Handoff
 
 See [HANDOFF.md](./HANDOFF.md)
@@ -499,6 +495,21 @@ See [HANDOFF.md](./HANDOFF.md)
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+English is the main language for project documentation and review. Russian README updates are welcome, but they should follow the English README and keep the documented behavior the same.
+
+## GitHub Release Notes
+
+GitHub Release Notes should stay in English and be written for DevOps engineers, sysadmins, and operators.
+
+Focus release notes on what changed for someone running the project:
+
+- changes they can run, observe, validate, or troubleshoot;
+- impact on ingestion, parsing, dashboards, scripts, deployment, validation, or generated artifacts;
+- exact validation commands, live run IDs, CI status, and expected pass/fail numbers;
+- upgrade notes, required operator actions, known limitations, and manual-only steps.
+
+Avoid file-by-file implementation notes unless they change how operators use the project.
 
 ## Security
 
